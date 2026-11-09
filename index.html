@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#14091f">
+<title>Otaku Chat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="auroraCanvas" class="aurora-canvas"></canvas>
+
+  <!-- Name / identity modal -->
+  <div class="name-overlay" id="nameOverlay">
+    <div class="name-card">
+      <div class="brand-mark">
+        <span class="brand-line">Otaku</span><span class="brand-line accent">Chat</span>
+      </div>
+      <p class="sub">اختر اسمًا للانضمام إلى المحادثة</p>
+      <div class="field">
+        <input type="text" id="nameInput" placeholder=" " maxlength="20" autocomplete="off">
+        <label for="nameInput">اسمك</label>
+      </div>
+      <button id="joinBtn"><span>دخول</span></button>
+      <div class="err" id="nameErr"></div>
+    </div>
+  </div>
+
+  <div class="app">
+    <!-- Header -->
+    <header class="chat-header">
+      <div class="brand-intro" id="brandIntro">
+        <span class="brand-intro-text" id="brandIntroText">Hi!</span>
+      </div>
+      <div class="header-meta">
+        <button class="pill pill-btn" id="onlineBtn">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="onlineCount">0</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Online users sheet -->
+    <div class="sheet-backdrop" id="onlineSheetBackdrop" style="display:none;">
+      <div class="sheet">
+        <div class="sheet-handle"></div>
+        <h4>متصل الآن</h4>
+        <div id="onlineList"></div>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <main class="messages-wrap" id="messagesWrap">
+      <div class="load-more-row" id="loadMoreRow" style="display:none;">
+        <button class="load-more-btn" id="loadMoreBtn">تحميل رسائل أقدم</button>
+      </div>
+      <div class="welcome-card" id="welcomeCard">
+        <div class="welcome-mark">Otaku Chat</div>
+        <p>ابدأ أول محادثة</p>
+      </div>
+      <div id="messagesList"></div>
+    </main>
+
+    <div class="typing-row" id="typingRow">
+      <span id="typingNames"></span>
+      <span class="typing-dots"><span></span><span></span><span></span></span>
+    </div>
+
+    <!-- Reply preview -->
+    <div class="reply-preview" id="replyPreview" style="display:none;">
+      <div class="bar"></div>
+      <div class="body">
+        <div class="who" id="replyPreviewWho"></div>
+        <div class="txt" id="replyPreviewTxt"></div>
+      </div>
+      <button class="cancel" id="replyCancelBtn">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      </button>
+    </div>
+
+    <!-- Composer -->
+    <div class="composer">
+      <div class="emoji-panel" id="emojiPanel">
+        <div class="emoji-tabs" id="emojiTabs"></div>
+        <div class="emoji-grid" id="emojiGrid"></div>
+      </div>
+      <button class="icon-btn" id="emojiToggleBtn" title="إيموجي" aria-label="إيموجي">
+        <svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="9" cy="10" r="1.1" fill="currentColor"/><circle cx="15" cy="10" r="1.1" fill="currentColor"/><path d="M8 14.5c1 1.3 2.4 2 4 2s3-.7 4-2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+      </button>
+      <div class="composer-input-wrap">
+        <textarea class="composer-input" id="messageInput" placeholder="اكتب رسالة..." maxlength="1000" rows="1"></textarea>
+      </div>
+      <button class="send-btn" id="sendBtn" aria-label="إرسال">
+        <svg viewBox="0 0 24 24" width="19" height="19"><path d="M4 12L20 4L13 20L11 13L4 12Z" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+  <script src="emoji-data.js"></script>
+  <script src="aurora.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
