@@ -729,7 +729,7 @@
     ctxCloseTimer = setTimeout(() => { if (ctxMenuEl) ctxMenuEl.innerHTML = ''; }, 160);
   }
 
-              function openContextMenu(row, key, data, mine, point) {
+                function openContextMenu(row, key, data, mine, point) {
     ensureCtxDom();
     clearTimeout(ctxCloseTimer);
     ctxMenuEl.classList.remove('show');
@@ -776,11 +776,19 @@
     document.body.appendChild(ctxBackdropEl);
     document.body.appendChild(ctxMenuEl);
 
-    // التعديل النهائي المباشر لموقع القائمة للطرفين
+    // الحل البسيط والدقيق المعتمد على نقطة اللمس (point.x) للطرفين
     const menuWidth = 260;
-    const rowEl = row.getBoundingClientRect();
-    let left = mine ? (rowEl.right - menuWidth) : rowEl.left;
+    let left;
 
+    if (mine) {
+      // رسائلك (اليمين): نرجعها للوضع البرفكت القديم بجانب الإصبع
+      left = point.x - menuWidth + 40;
+    } else {
+      // رسائل الطرف الآخر (اليسار): تظهر مباشرة بالقرب من موضع إصبعك
+      left = point.x - 15;
+    }
+
+    // حماية القائمة كي لا تخرج عن حدود شاشة الموبايل
     left = Math.max(10, Math.min(left, window.innerWidth - menuWidth - 10));
 
     let top = point.y + 10;
