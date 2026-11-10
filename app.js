@@ -729,7 +729,7 @@
     ctxCloseTimer = setTimeout(() => { if (ctxMenuEl) ctxMenuEl.innerHTML = ''; }, 160);
   }
 
-          function openContextMenu(row, key, data, mine, point) {
+            function openContextMenu(row, key, data, mine, point) {
     ensureCtxDom();
     clearTimeout(ctxCloseTimer);
     ctxMenuEl.classList.remove('show');
@@ -776,18 +776,19 @@
     document.body.appendChild(ctxBackdropEl);
     document.body.appendChild(ctxMenuEl);
 
-    // الطريقة البسيطة والصحيحة تماماً المعتمدة على نقطة اللمس مع حماية حدود الشاشة
+    // الحل المباشر لموضع اللمس للطرفين
     const menuWidth = 260;
     let left;
-    
+
     if (mine) {
-      // رسالتك (يمين)
+      // رسالتك (يمين) - محاذاة قريبة من مكان الضغط
       left = point.x - menuWidth + 40;
     } else {
-      // رسالة الطرف الآخر (يسار): اجعلها قريبة من نقطة اللمس تماماً
-      left = point.x - 20;
+      // رسالة الطرف الآخر (يسار) - تبدأ مباشرة من تحت الإصبع بمسافة بسيطة جداً
+      left = point.x - 10;
     }
-    
+
+    // حماية القائمة لتظل داخل الشاشة تماماً
     left = Math.max(10, Math.min(left, window.innerWidth - menuWidth - 10));
 
     let top = point.y + 10;
@@ -804,6 +805,7 @@
       ctxMenuEl.classList.add('show');
     });
   }
+
 
   function makeCtxItem(svgEl, label, onClick, danger) {
     const item = document.createElement('div');
