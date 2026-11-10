@@ -141,7 +141,7 @@
   // Brand intro animation: "Hi!" -> "Nice to see you" -> "Otaku Chat"
   // ========================================================
   function playBrandIntro() {
-    const sequence = ['Hi!', 'Nice to see you'];
+    const sequence = ['Hi', 'Nice to see you'];
     let i = 0;
     brandIntroText.textContent = sequence[0];
     brandIntroText.classList.add('anim-in');
@@ -155,14 +155,14 @@
         if (i < sequence.length) {
           brandIntroText.textContent = sequence[i];
           brandIntroText.classList.add('anim-in');
-          setTimeout(next, 1250);
+          setTimeout(next, 2000);
         } else {
-          brandIntroText.textContent = 'Otaku Chat';
+          brandIntroText.textContent = 'ᠻ𝘳𝓲ꫀꪀᦔ𝘴' + ' 𝘳ꪮꪮꪑ';
           brandIntroText.classList.add('final', 'anim-in');
         }
       }, 380);
     }
-    setTimeout(next, 1250);
+    setTimeout(next, 2000);
   }
 
   // ========================================================
