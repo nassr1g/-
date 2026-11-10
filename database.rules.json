@@ -9,7 +9,7 @@
         ".indexOn": ["timestamp"],
 
         "$messageId": {
-          ".write": "!data.exists() || (data.exists() && !data.child('deleted').exists() && newData.hasChildren(['deleted','deletedAt']) && newData.child('text').val() === data.child('text').val() && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val())",
+          ".write": "!data.exists() || (data.exists() && !data.child('deleted').exists() && newData.hasChildren(['deleted','deletedAt']) && newData.child('text').val() === data.child('text').val() && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val()) || (data.exists() && !data.child('deleted').exists() && newData.hasChildren(['edited','editedAt']) && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val())",
 
           ".validate": "newData.hasChildren(['text','senderUid','senderName','timestamp'])",
 
@@ -37,6 +37,12 @@
             ".validate": "newData.isBoolean() && newData.val() === true"
           },
           "deletedAt": {
+            ".validate": "newData.val() === now"
+          },
+          "edited": {
+            ".validate": "newData.isBoolean() && newData.val() === true"
+          },
+          "editedAt": {
             ".validate": "newData.val() === now"
           },
 

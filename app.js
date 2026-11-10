@@ -41,6 +41,8 @@
   const welcomeCard = $('welcomeCard');
   const loadMoreRow = $('loadMoreRow');
   const loadMoreBtn = $('loadMoreBtn');
+  const jumpBottomBtn = $('jumpBottomBtn');
+  const jumpBottomBadge = $('jumpBottomBadge');
 
   const statusDot = $('statusDot');
   const onlineCount = $('onlineCount');
@@ -86,6 +88,9 @@
   let ctxMenuEl = null;
   let ctxBackdropEl = null;
   let ctxCloseTimer = null;
+  let ctxMenuResizeObserver = null;
+  let unseenNewCount = 0;
+  let editingKey = null; // key of the message currently being edited, or null
 
   // ========================================================
   // Identity (persistent, localStorage, survives refresh)
@@ -138,10 +143,13 @@
   }
 
   // ========================================================
-  // Brand intro animation: "Hi!" -> "Nice to see you" -> "Otaku Chat"
+  // Brand intro animation: "Hi!" -> "Nice to see you" -> site name
+  // Slow, deliberate, cinematic timing per request.
   // ========================================================
+  const SITE_NAME = "ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ";
+
   function playBrandIntro() {
-    const sequence = ['Hi', 'Nice to see you'];
+    const sequence = ['Hi!', 'Nice to see you'];
     let i = 0;
     brandIntroText.textContent = sequence[0];
     brandIntroText.classList.add('anim-in');
@@ -155,14 +163,14 @@
         if (i < sequence.length) {
           brandIntroText.textContent = sequence[i];
           brandIntroText.classList.add('anim-in');
-          setTimeout(next, 2000);
+          setTimeout(next, 2200);
         } else {
-          brandIntroText.textContent = 'ᠻ𝘳𝓲ꫀꪀᦔ𝘴' + ' 𝘳ꪮꪮꪑ';
+          brandIntroText.textContent = SITE_NAME;
           brandIntroText.classList.add('final', 'anim-in');
         }
-      }, 380);
+      }, 700);
     }
-    setTimeout(next, 2000);
+    setTimeout(next, 2200);
   }
 
   // ========================================================
@@ -352,7 +360,11 @@
       const data = snap.val();
       renderMessage(key, data, liveSyncStarted /* animate only once we're past the initial batch */);
       if (oldestLoadedKey === null) oldestLoadedKey = key;
-      scrollToBottomIfNear(!liveSyncStarted);
+      // Always force-scroll for the initial batch and for my own just-sent
+      // messages; for incoming messages from others, only auto-scroll if
+      // the user is already near the bottom (otherwise show the jump button).
+      const isMine = data && data.senderUid === myUid;
+      scrollToBottomIfNear(!liveSyncStarted || isMine);
     });
 
     liveQuery.on('child_changed', (snap) => {
@@ -430,13 +442,44 @@
 
   function scrollToBottom() {
     requestAnimationFrame(() => { messagesWrap.scrollTop = messagesWrap.scrollHeight; });
+    unseenNewCount = 0;
+    updateJumpBtn();
   }
+  function isNearBottom() {
+    const threshold = 140;
+    return messagesWrap.scrollHeight - messagesWrap.scrollTop - messagesWrap.clientHeight < threshold;
+  }
+  // Auto-scroll only if the user is already at/near the bottom. Otherwise
+  // (they're reading older messages) leave their scroll position alone and
+  // surface the jump-to-bottom button with an unseen-count badge instead.
   function scrollToBottomIfNear(force) {
     if (force) { scrollToBottom(); return; }
-    const threshold = 140;
-    const nearBottom = messagesWrap.scrollHeight - messagesWrap.scrollTop - messagesWrap.clientHeight < threshold;
-    if (nearBottom) scrollToBottom();
+    if (isNearBottom()) {
+      scrollToBottom();
+    } else {
+      unseenNewCount++;
+      jumpBottomBtn.classList.add('show');
+      updateJumpBtn();
+    }
   }
+  function updateJumpBtn() {
+    if (unseenNewCount > 0) {
+      jumpBottomBadge.textContent = unseenNewCount > 9 ? '9+' : String(unseenNewCount);
+      jumpBottomBadge.style.display = 'flex';
+    } else {
+      jumpBottomBadge.style.display = 'none';
+    }
+  }
+  jumpBottomBtn.addEventListener('click', scrollToBottom);
+  messagesWrap.addEventListener('scroll', () => {
+    if (isNearBottom()) {
+      jumpBottomBtn.classList.remove('show');
+      unseenNewCount = 0;
+      updateJumpBtn();
+    } else {
+      jumpBottomBtn.classList.add('show');
+    }
+  });
 
   // ========================================================
   // Rendering a message row
@@ -496,6 +539,12 @@
       textDiv.className = 'msg-text';
       textDiv.textContent = data.text || '';
       bubble.appendChild(textDiv);
+      if (data.edited) {
+        const tag = document.createElement('span');
+        tag.className = 'msg-edited-tag';
+        tag.textContent = '(معدّلة)';
+        bubble.appendChild(tag);
+      }
     }
 
     const meta = document.createElement('div');
@@ -574,6 +623,26 @@
       const freshRow = row.cloneNode(true);
       row.replaceWith(freshRow);
       allMessagesByKey.set(key, { data, el: freshRow });
+      return;
+    }
+
+    if (!nowDeleted && data.edited) {
+      // Text-only edit: update the bubble's text content in place. No need
+      // to rebuild the row - gestures, reactions listeners etc. stay valid.
+      const row = entry.el;
+      const bubble = row.querySelector('.msg-bubble');
+      if (!bubble) return;
+      let textDiv = bubble.querySelector('.msg-text');
+      if (textDiv) {
+        textDiv.textContent = data.text || '';
+      }
+      if (!bubble.querySelector('.msg-edited-tag')) {
+        const meta = bubble.querySelector('.msg-meta');
+        const tag = document.createElement('span');
+        tag.className = 'msg-edited-tag';
+        tag.textContent = '(معدّلة)';
+        if (meta) bubble.insertBefore(tag, meta); else bubble.appendChild(tag);
+      }
     }
   }
 
@@ -725,11 +794,12 @@
     if (!ctxMenuEl) return;
     ctxMenuEl.classList.remove('show');
     ctxBackdropEl.classList.remove('show');
+    if (ctxMenuResizeObserver) { ctxMenuResizeObserver.disconnect(); ctxMenuResizeObserver = null; }
     clearTimeout(ctxCloseTimer);
     ctxCloseTimer = setTimeout(() => { if (ctxMenuEl) ctxMenuEl.innerHTML = ''; }, 160);
   }
 
-                function openContextMenu(row, key, data, mine, point) {
+  function openContextMenu(row, key, data, mine, point) {
     ensureCtxDom();
     clearTimeout(ctxCloseTimer);
     ctxMenuEl.classList.remove('show');
@@ -762,7 +832,13 @@
     });
     list.appendChild(replyItem);
 
-    if (mine) {
+    if (mine && !data.deleted) {
+      const editItem = makeCtxItem(editGlyphMenu(), 'تعديل الرسالة', () => {
+        startEdit(key, data);
+        closeContextMenu();
+      });
+      list.appendChild(editItem);
+
       const deleteItem = makeCtxItem(trashGlyphMenu(), 'حذف الرسالة', () => {
         deleteOwnMessage(key);
         closeContextMenu();
@@ -776,36 +852,56 @@
     document.body.appendChild(ctxBackdropEl);
     document.body.appendChild(ctxMenuEl);
 
-    // الحل البسيط والدقيق المعتمد على نقطة اللمس (point.x) للطرفين
-    const menuWidth = 260;
-    let left;
+    // Anchor to the actual message bubble (not the raw tap point), so the
+    // menu always sits right next to the selected message with no gap or
+    // off-screen clipping, even on narrow screens. Measured AFTER paint
+    // (double rAF) since a hidden/just-appended element's rect can be
+    // reported smaller than its true rendered size.
+    const bubbleEl = row.querySelector('.msg-bubble') || row;
+    const margin = 10;
 
-    if (mine) {
-      // رسائلك (اليمين): نرجعها للوضع البرفكت القديم بجانب الإصبع
-      left = point.x - menuWidth + 40;
-    } else {
-      // رسائل الطرف الآخر (اليسار): تظهر مباشرة بالقرب من موضع إصبعك
-      left = point.x - 15;
+    function positionMenu() {
+      const bubbleRect = bubbleEl.getBoundingClientRect();
+      const menuWidth = ctxMenuEl.offsetWidth;
+      const menuHeight = ctxMenuEl.offsetHeight;
+      if (!menuWidth || !menuHeight) return;
+
+      let left = mine ? (bubbleRect.right - menuWidth) : bubbleRect.left;
+      left = Math.max(margin, Math.min(left, window.innerWidth - menuWidth - margin));
+
+      let top = bubbleRect.bottom + 8;
+      if (top + menuHeight > window.innerHeight - margin) {
+        top = bubbleRect.top - menuHeight - 8;
+      }
+      top = Math.max(margin, Math.min(top, window.innerHeight - menuHeight - margin));
+
+      ctxMenuEl.style.left = left + 'px';
+      ctxMenuEl.style.top = top + 'px';
     }
 
-    // حماية القائمة كي لا تخرج عن حدود شاشة الموبايل
-    left = Math.max(10, Math.min(left, window.innerWidth - menuWidth - 10));
+    ctxMenuEl.style.left = '-9999px';
+    ctxMenuEl.style.top = '0px';
 
-    let top = point.y + 10;
-    const estHeight = 220;
-    if (top + estHeight > window.innerHeight - 10) {
-      top = Math.max(10, point.y - estHeight - 10);
+    // The menu's true width can keep settling for a frame or two after it's
+    // appended (content/font layout), so instead of guessing how many
+    // rAFs are "enough", a ResizeObserver re-positions it every time its
+    // measured box actually changes - self-correcting and timing-proof.
+    let ctxResizeObserver = null;
+    if (window.ResizeObserver) {
+      ctxResizeObserver = new ResizeObserver(() => positionMenu());
+      ctxResizeObserver.observe(ctxMenuEl);
     }
-
-    ctxMenuEl.style.left = left + 'px';
-    ctxMenuEl.style.top = top + 'px';
+    if (ctxMenuResizeObserver) { ctxMenuResizeObserver.disconnect(); }
+    ctxMenuResizeObserver = ctxResizeObserver;
 
     requestAnimationFrame(() => {
-      ctxBackdropEl.classList.add('show');
-      ctxMenuEl.classList.add('show');
+      requestAnimationFrame(() => {
+        positionMenu();
+        ctxBackdropEl.classList.add('show');
+        ctxMenuEl.classList.add('show');
+      });
     });
   }
-
 
   function makeCtxItem(svgEl, label, onClick, danger) {
     const item = document.createElement('div');
@@ -829,22 +925,53 @@
     wrap.innerHTML = '<path d="M5 7H19M10 11V16M14 11V16M6 7L7 19A2 2 0 0 0 9 21H15A2 2 0 0 0 17 19L18 7M9 7V4A1 1 0 0 1 10 3H14A1 1 0 0 1 15 4V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>';
     return wrap;
   }
+  function editGlyphMenu() {
+    const wrap = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    wrap.setAttribute('viewBox', '0 0 24 24'); wrap.setAttribute('width', '18'); wrap.setAttribute('height', '18');
+    wrap.innerHTML = '<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M13.5 7l3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>';
+    return wrap;
+  }
 
   // ========================================================
   // Reply flow
   // ========================================================
   function startReply(key, data) {
+    cancelEdit();
     activeReply = { key, sender: data.senderName || 'مجهول', text: data.text || '' };
+    replyPreview.classList.remove('edit-mode');
     replyPreviewWho.textContent = activeReply.sender;
     replyPreviewTxt.textContent = activeReply.text;
     replyPreview.style.display = 'flex';
     messageInput.focus();
   }
-  function cancelReply() { activeReply = null; replyPreview.style.display = 'none'; }
-  replyCancelBtn.addEventListener('click', cancelReply);
+  function cancelReply() { activeReply = null; if (!editingKey) replyPreview.style.display = 'none'; }
+  replyCancelBtn.addEventListener('click', () => { cancelReply(); cancelEdit(); });
 
   // ========================================================
-  // Sending messages
+  // Edit flow (own messages only) — reuses the reply-preview bar
+  // in a distinct "edit mode" so there's no separate UI to build.
+  // ========================================================
+  function startEdit(key, data) {
+    cancelReply();
+    editingKey = key;
+    messageInput.value = data.text || '';
+    autoGrow();
+    replyPreview.classList.add('edit-mode');
+    replyPreviewWho.textContent = 'تعديل الرسالة';
+    replyPreviewTxt.textContent = data.text || '';
+    replyPreview.style.display = 'flex';
+    messageInput.focus();
+    const len = messageInput.value.length;
+    messageInput.setSelectionRange(len, len);
+  }
+  function cancelEdit() {
+    editingKey = null;
+    replyPreview.classList.remove('edit-mode');
+    if (!activeReply) replyPreview.style.display = 'none';
+  }
+
+  // ========================================================
+  // Sending / editing messages
   // ========================================================
   function sendMessage() {
     const raw = messageInput.value;
@@ -852,6 +979,23 @@
     if (!text) return;
     if (!firebaseReady || !isConnected) {
       showSystemError('لا يمكن إرسال الرسالة. تحقق من الاتصال بالإنترنت.');
+      return;
+    }
+
+    if (editingKey) {
+      const key = editingKey;
+      db.ref(`chat/messages/${key}`).update({
+        text,
+        edited: true,
+        editedAt: firebase.database.ServerValue.TIMESTAMP
+      }).then(() => {
+        messageInput.value = '';
+        autoGrow();
+        cancelEdit();
+      }).catch((err) => {
+        console.error('edit error', err);
+        showSystemError('تعذر تعديل الرسالة');
+      });
       return;
     }
 

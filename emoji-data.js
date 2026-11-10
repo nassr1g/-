@@ -58,4 +58,4 @@ const EMOJI_CATEGORIES = [
 ];
 
 // Quick-reaction bar (shown first, most common) — users can still open the full picker for anything else.
-const QUICK_REACTIONS = ['❤️','😂','🙏','👍','🔥'];
+const QUICK_REACTIONS = ['❤️','😂','😮','😢','🙏','👍','🔥','🎉'];
