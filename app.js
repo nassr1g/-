@@ -778,7 +778,16 @@
 
     // الطريقة البسيطة والصحيحة تماماً المعتمدة على نقطة اللمس مع حماية حدود الشاشة
     const menuWidth = 260;
-    let left = point.x - (mine ? menuWidth - 40 : 20);
+    let left;
+    
+    if (mine) {
+      // رسالتك (يمين)
+      left = point.x - menuWidth + 40;
+    } else {
+      // رسالة الطرف الآخر (يسار): اجعلها قريبة من نقطة اللمس تماماً
+      left = point.x - 20;
+    }
+    
     left = Math.max(10, Math.min(left, window.innerWidth - menuWidth - 10));
 
     let top = point.y + 10;
