@@ -9,11 +9,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Friend's room">
+<meta name="apple-mobile-web-app-title" content="ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<link rel="icon" type="image/png" href="/icons/app-icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<title>Friend's room</title>
+<title>ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -61,6 +61,16 @@
       </button>
     </div>
 
+    <!-- Install banner -->
+    <div class="notif-banner" id="installBanner" style="display:none;">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+      <span class="notif-banner-text">ثبّت التطبيق للوصول السريع</span>
+      <button class="notif-banner-btn" id="installBtn">تثبيت</button>
+      <button class="notif-banner-close" id="installClose" aria-label="لا تظهر مرة أخرى">
+        <svg viewBox="0 0 24 24" width="14" height="14"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      </button>
+    </div>
+
     <!-- Notification settings sheet -->
     <div class="sheet-backdrop" id="notifSheetBackdrop" style="display:none;">
       <div class="sheet">
@@ -74,6 +84,9 @@
           <button class="notif-opt" data-mode="normal"><span class="radio"></span><span class="opt-txt"><b>كتم الرسائل العادية</b><small>يصلك فقط ما فيه رد عليك</small></span></button>
           <button class="notif-opt" data-mode="all"><span class="radio"></span><span class="opt-txt"><b>كتم الكل</b><small>لا يصلك أي إشعار أو صوت</small></span></button>
         </div>
+        <h4 class="notif-sub">الصوت</h4>
+        <button class="notif-toggle on" id="sendSoundToggle"><span class="opt-txt"><b>صوت إرسال الرسالة</b><small>نغمة قصيرة عند إرسال رسالتك</small></span><span class="switch"></span></button>
+        <button class="notif-enable-btn" id="installSheetBtn" style="display:none; margin-top:14px;">تثبيت التطبيق</button>
       </div>
     </div>
 

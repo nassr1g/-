@@ -27,10 +27,12 @@
   const LS_NAME_KEY = 'otaku_name_v1';
   const LS_MUTE_KEY = 'otaku_mute_v1';
   const LS_BANNER_KEY = 'otaku_notif_banner_closed_v1';
+  const LS_SENDSND_KEY = 'otaku_send_sound_v1';
+  const LS_INSTALL_KEY = 'otaku_install_dismissed_v1';
 
   // Firebase Console > Project settings > Cloud Messaging > Web Push certificates
   // > Generate key pair  -> paste the PUBLIC key here.
-  const VAPID_KEY = 'BGlc_HcdcSEwssUo5AdcZYNQzvYvciQuka8TfDp-sbNdJkl7QYCesAbyfZKrIgXG6N6wWrtSCK1mpZs3A__XH6Y';
+  const VAPID_KEY = 'PUT_YOUR_VAPID_KEY_HERE';
   const NOTIFY_ENDPOINT = '/api/notify';
 
   // ---------- DOM ----------
@@ -81,6 +83,11 @@
   const notifBannerText = $('notifBannerText');
   const notifBannerBtn = $('notifBannerBtn');
   const notifBannerClose = $('notifBannerClose');
+  const sendSoundToggle = $('sendSoundToggle');
+  const installBanner = $('installBanner');
+  const installBtn = $('installBtn');
+  const installClose = $('installClose');
+  const installSheetBtn = $('installSheetBtn');
 
   // ---------- State ----------
   let db = null;
@@ -1034,6 +1041,7 @@
     }
 
     const newRef = messagesRef.push(payload);
+    playSound('send');
     newRef.then(() => {
       messageInput.value = '';
       autoGrow();
@@ -1085,7 +1093,12 @@
     const reactionRef = db.ref(`chat/messages/${key}/reactions/${emoji}/${myUid}`);
     reactionRef.once('value').then(snap => {
       if (snap.exists()) reactionRef.remove();
-      else reactionRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP });
+      else {
+        reactionRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP }).then(() => {
+          const e = allMessagesByKey.get(key);
+          if (e && e.data.senderUid !== myUid) notifyServer(key, 0, emoji);
+        });
+      }
     });
   }
 
@@ -1216,6 +1229,8 @@
   let messaging = null;
   let pushToken = null;
   let audioCtx = null;
+  let sendSoundOn = true;
+  let deferredInstall = null;
 
   function isStandalone() {
     return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
@@ -1234,6 +1249,7 @@
     try {
       const v = localStorage.getItem(LS_MUTE_KEY);
       if (v === 'normal' || v === 'all') muteMode = v;
+      sendSoundOn = localStorage.getItem(LS_SENDSND_KEY) !== '0';
     } catch (e) {}
   }
 
@@ -1307,17 +1323,19 @@
   }
 
   // Ask the server to fan the message out as push notifications.
-  function notifyServer(key, attempt) {
+  function notifyServer(key, attempt, emoji) {
     if (!key) return;
+    const body = { key, uid: myUid };
+    if (emoji) { body.type = 'reaction'; body.emoji = emoji; }
     fetch(NOTIFY_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key, uid: myUid }),
+      body: JSON.stringify(body),
       keepalive: true
     }).then((r) => {
       if (!r.ok && r.status >= 500 && !attempt) throw new Error('retry');
     }).catch(() => {
-      if (!attempt) setTimeout(() => notifyServer(key, 1), 3000);
+      if (!attempt) setTimeout(() => notifyServer(key, 1, emoji), 3000);
     });
   }
 
@@ -1350,13 +1368,20 @@
   }
 
   function playSound(kind) {
-    if (muteMode === 'all') return;
-    if (kind === 'message' && muteMode === 'normal') return;
+    if (kind === 'send') {
+      if (!sendSoundOn) return;
+    } else {
+      if (muteMode === 'all') return;
+      if (kind === 'message' && muteMode === 'normal') return;
+    }
     const ctx = getAudioCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const t = ctx.currentTime + 0.02;
-    if (kind === 'reply') {
+    if (kind === 'send') {
+      tone(ctx, 660, t, 0.09, 0.11);
+      tone(ctx, 990, t + 0.06, 0.16, 0.09);
+    } else if (kind === 'reply') {
       tone(ctx, 784, t, 0.16, 0.22);
       tone(ctx, 988, t + 0.11, 0.16, 0.22);
       tone(ctx, 1319, t + 0.22, 0.38, 0.24);
@@ -1427,6 +1452,8 @@
     } else {
       notifBanner.style.display = 'none';
     }
+    sendSoundToggle.classList.toggle('on', sendSoundOn);
+    updateInstallUI();
   }
 
   notifBtn.addEventListener('click', () => { updateNotifUI(); notifSheetBackdrop.style.display = 'flex'; });
@@ -1438,6 +1465,42 @@
     if (btn) setMuteMode(btn.dataset.mode);
   });
   notifEnableBtn.addEventListener('click', enableNotifications);
+  sendSoundToggle.addEventListener('click', () => {
+    sendSoundOn = !sendSoundOn;
+    try { localStorage.setItem(LS_SENDSND_KEY, sendSoundOn ? '1' : '0'); } catch (e) {}
+    updateNotifUI();
+    if (sendSoundOn) playSound('send');
+  });
+
+  // ---------- Install prompt (our own, dismissible) ----------
+  function installDismissed() {
+    try { return localStorage.getItem(LS_INSTALL_KEY) === '1'; } catch (e) { return false; }
+  }
+  function updateInstallUI() {
+    const can = !!deferredInstall && !isStandalone();
+    installSheetBtn.style.display = can ? 'block' : 'none';
+    installBanner.style.display = (can && !installDismissed() && notifBanner.style.display === 'none') ? 'flex' : 'none';
+  }
+  function promptInstall() {
+    if (!deferredInstall) return;
+    const ev = deferredInstall;
+    deferredInstall = null;
+    ev.prompt();
+    if (ev.userChoice) ev.userChoice.then(updateInstallUI, updateInstallUI);
+    updateInstallUI();
+  }
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); // stop Chrome's automatic prompt on every load
+    deferredInstall = e;
+    updateInstallUI();
+  });
+  window.addEventListener('appinstalled', () => { deferredInstall = null; updateInstallUI(); });
+  installBtn.addEventListener('click', promptInstall);
+  installSheetBtn.addEventListener('click', () => { notifSheetBackdrop.style.display = 'none'; promptInstall(); });
+  installClose.addEventListener('click', () => {
+    try { localStorage.setItem(LS_INSTALL_KEY, '1'); } catch (e) {}
+    installBanner.style.display = 'none';
+  });
   notifBannerBtn.addEventListener('click', enableNotifications);
   notifBannerClose.addEventListener('click', () => {
     try { localStorage.setItem(LS_BANNER_KEY, '1'); } catch (e) {}

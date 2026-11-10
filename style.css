@@ -884,3 +884,27 @@ body {
 .notif-opt.active { background: rgba(155,89,182,.2); border-color: var(--neon-cyan); }
 .notif-opt.active .radio { border-color: var(--neon-cyan); }
 .notif-opt.active .radio::after { transform: scale(1); }
+
+.notif-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; text-align: start;
+  padding: 12px 14px;
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(155,89,182,.2);
+  border-radius: var(--radius-md);
+  color: var(--text-1); font-family: inherit; cursor: pointer;
+}
+.notif-toggle .opt-txt { display: flex; flex-direction: column; gap: 2px; }
+.notif-toggle b { font-size: 14px; font-weight: 600; }
+.notif-toggle small { font-size: 12px; color: var(--text-3); }
+.switch {
+  width: 42px; height: 24px; border-radius: 12px; flex-shrink: 0;
+  background: rgba(255,255,255,.16); position: relative; transition: background .2s ease;
+}
+.switch::after {
+  content: ''; position: absolute; top: 3px; right: 3px;
+  width: 18px; height: 18px; border-radius: 50%; background: #fff;
+  transition: transform .2s cubic-bezier(.3,1.4,.5,1);
+}
+.notif-toggle.on .switch { background: var(--accent-1); }
+.notif-toggle.on .switch::after { transform: translateX(-18px); }

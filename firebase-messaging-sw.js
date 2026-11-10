@@ -8,9 +8,12 @@
 'use strict';
 
 const SITE_NAME = "ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ";
-const ICON = '/icons/icon-192.png';
-const ICON_REPLY = '/icons/icon-reply-192.png';
-const BADGE = '/icons/badge-96.png';
+const ICON = '/icons/notif-message.png';
+const ICON_REPLY = '/icons/notif-reply.png';
+const ICON_REACT = '/icons/notif-reaction.png';
+const BADGE = '/icons/badge-message.png';
+const BADGE_REPLY = '/icons/badge-reply.png';
+const BADGE_REACT = '/icons/badge-reaction.png';
 const IS_IOS = /iPhone|iPad|iPod/i.test(self.navigator.userAgent);
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -37,11 +40,10 @@ async function handlePush(d) {
   const ts = Number(d.ts) || Date.now();
 
   if (d.type === 'reply') {
-    const body = d.quote ? text + '\n↩ ' + d.quote : text;
     await self.registration.showNotification(sender + ' • رد عليك', {
-      body,
+      body: text,
       icon: ICON_REPLY,
-      badge: BADGE,
+      badge: BADGE_REPLY,
       tag: 'reply-' + (d.key || ts),
       renotify: true,
       dir: 'rtl',
@@ -49,6 +51,22 @@ async function handlePush(d) {
       vibrate: [180, 70, 180, 70, 260],
       timestamp: ts,
       data: { url: '/', type: 'reply', key: d.key || '' }
+    });
+    return;
+  }
+
+  if (d.type === 'reaction') {
+    await self.registration.showNotification(sender + ' • تفاعل على رسالتك', {
+      body: (d.emoji || '') + '  ' + text,
+      icon: ICON_REACT,
+      badge: BADGE_REACT,
+      tag: 'react-' + (d.key || ts) + '-' + sender,
+      renotify: true,
+      dir: 'rtl',
+      lang: 'ar',
+      vibrate: [90, 50, 90],
+      timestamp: ts,
+      data: { url: '/', type: 'reaction', key: d.key || '' }
     });
     return;
   }
