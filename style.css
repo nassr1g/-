@@ -391,7 +391,8 @@ body {
   z-index: 50;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  /* التعديل الجذري هنا: جعلنا المحاذاة تعتمد على اليمين لكي لا ينفصل الجزء العلوي عن السفلي أبداً */
+  align-items: flex-end !important;
   width: max-content;
   opacity: 0;
   transform: scale(.92) translateY(6px);
@@ -410,16 +411,8 @@ body {
   padding: 7px 9px;
   box-shadow: var(--shadow-1);
   margin-bottom: 8px;
-  align-self: flex-start;
-}
-
-.ctx-reactions span {
-  font-size: 21px;
-  cursor: pointer;
-  padding: 3px;
-  border-radius: 10px;
-  transition: transform .12s ease;
-  line-height: 1;
+  /* إجبار شريط الإيموجي على التمحور مع القائمة تماماً لكي لا ينفصل عنها */
+  align-self: flex-end !important;
 }
 .ctx-reactions span:hover { transform: scale(1.25); }
 .ctx-reactions .ctx-more {
