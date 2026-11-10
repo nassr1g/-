@@ -88,6 +88,19 @@
         }
       },
 
+      "push": {
+        ".read": false,
+        "$token": {
+          ".write": true,
+          ".validate": "newData.hasChildren(['uid','name','mute','ts'])",
+          "uid": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
+          "name": { ".validate": "newData.isString() && newData.val().length <= 20" },
+          "mute": { ".validate": "newData.val() === 'none' || newData.val() === 'normal' || newData.val() === 'all'" },
+          "ts": { ".validate": true },
+          "$other": { ".validate": false }
+        }
+      },
+
       "typing": {
         ".read": true,
         "$uid": {

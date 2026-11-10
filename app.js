@@ -25,6 +25,13 @@
   const SWIPE_MAX_PX = 88;
   const LS_UID_KEY = 'otaku_uid_v1';
   const LS_NAME_KEY = 'otaku_name_v1';
+  const LS_MUTE_KEY = 'otaku_mute_v1';
+  const LS_BANNER_KEY = 'otaku_notif_banner_closed_v1';
+
+  // Firebase Console > Project settings > Cloud Messaging > Web Push certificates
+  // > Generate key pair  -> paste the PUBLIC key here.
+  const VAPID_KEY = 'BGlc_HcdcSEwssUo5AdcZYNQzvYvciQuka8TfDp-sbNdJkl7QYCesAbyfZKrIgXG6N6wWrtSCK1mpZs3A__XH6Y';
+  const NOTIFY_ENDPOINT = '/api/notify';
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
@@ -63,6 +70,17 @@
   const emojiGrid = $('emojiGrid');
   const typingRow = $('typingRow');
   const typingNames = $('typingNames');
+
+  const notifBtn = $('notifBtn');
+  const notifDot = $('notifDot');
+  const notifSheetBackdrop = $('notifSheetBackdrop');
+  const notifStatus = $('notifStatus');
+  const notifEnableBtn = $('notifEnableBtn');
+  const notifOptions = $('notifOptions');
+  const notifBanner = $('notifBanner');
+  const notifBannerText = $('notifBannerText');
+  const notifBannerBtn = $('notifBannerBtn');
+  const notifBannerClose = $('notifBannerClose');
 
   // ---------- State ----------
   let db = null;
@@ -325,6 +343,7 @@
     setupTyping();
     startMessageSync();
     listenForEvents();
+    initNotifications();
 
     if (isFreshJoin) {
       eventsRef.push({
@@ -365,6 +384,7 @@
       // the user is already near the bottom (otherwise show the jump button).
       const isMine = data && data.senderUid === myUid;
       scrollToBottomIfNear(!liveSyncStarted || isMine);
+      if (liveSyncStarted && !isMine) handleIncomingForSound(data);
     });
 
     liveQuery.on('child_changed', (snap) => {
@@ -1013,7 +1033,8 @@
       };
     }
 
-    messagesRef.push(payload).then(() => {
+    const newRef = messagesRef.push(payload);
+    newRef.then(() => {
       messageInput.value = '';
       autoGrow();
       cancelReply();
@@ -1022,6 +1043,7 @@
       sendBtn.classList.add('pop');
       if (navigator.vibrate) navigator.vibrate(30);
       typingRef.child(myUid).remove();
+      notifyServer(newRef.key);
     }).catch((err) => {
       console.error('send error', err);
       showSystemError('فشل في إرسال الرسالة');
@@ -1181,10 +1203,253 @@
   }, true);
 
   // ========================================================
+  // Notifications: Web Push (FCM) + in-app sounds + mute modes
+  // - Closed / background: the Service Worker shows the notification
+  //   (pushed by /api/notify through FCM, high urgency).
+  // - Page open & visible: the SW stays silent and we play our own
+  //   in-app sound (normal chime vs. reply chime).
+  // muteMode: 'none' | 'normal' (mute non-reply messages) | 'all'
+  // ========================================================
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  let muteMode = 'none';
+  let swReg = null;
+  let messaging = null;
+  let pushToken = null;
+  let audioCtx = null;
+
+  function isStandalone() {
+    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  }
+  function needsIOSInstall() { return isIOS && !isStandalone(); }
+  function pushSupported() {
+    try {
+      return 'serviceWorker' in navigator && 'Notification' in window && 'PushManager' in window &&
+        typeof firebase !== 'undefined' && !!firebase.messaging && firebase.messaging.isSupported();
+    } catch (e) { return false; }
+  }
+  function vapidConfigured() { return !!VAPID_KEY && VAPID_KEY.indexOf('PUT_') !== 0; }
+  function notifPermission() { return ('Notification' in window) ? Notification.permission : 'denied'; }
+
+  function loadMuteMode() {
+    try {
+      const v = localStorage.getItem(LS_MUTE_KEY);
+      if (v === 'normal' || v === 'all') muteMode = v;
+    } catch (e) {}
+  }
+
+  async function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return null;
+    try {
+      swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      await navigator.serviceWorker.ready;
+      return swReg;
+    } catch (e) {
+      console.warn('SW register failed', e);
+      return null;
+    }
+  }
+
+  async function fetchPushToken() {
+    if (!pushSupported() || !vapidConfigured()) return null;
+    if (!swReg) await registerServiceWorker();
+    if (!swReg) return null;
+    if (!messaging) messaging = firebase.messaging();
+    return messaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: swReg });
+  }
+
+  async function saveTokenRecord(token) {
+    pushToken = token;
+    await db.ref('chat/push/' + token).set({
+      uid: myUid,
+      name: myName,
+      mute: muteMode,
+      ts: firebase.database.ServerValue.TIMESTAMP
+    });
+  }
+
+  async function enableNotifications() {
+    if (!pushSupported() || !vapidConfigured()) { updateNotifUI(); return; }
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        const token = await fetchPushToken();
+        if (token) await saveTokenRecord(token);
+      }
+    } catch (e) {
+      console.error('enable notifications error', e);
+    }
+    updateNotifUI();
+  }
+
+  function setMuteMode(mode) {
+    if (mode !== 'none' && mode !== 'normal' && mode !== 'all') return;
+    muteMode = mode;
+    try { localStorage.setItem(LS_MUTE_KEY, mode); } catch (e) {}
+    if (pushToken && db) {
+      db.ref('chat/push/' + pushToken).update({ mute: mode }).catch(() => {});
+    }
+    updateNotifUI();
+  }
+
+  function clearShownNotifications() {
+    if (!swReg) return;
+    swReg.getNotifications().then(list => list.forEach(n => n.close())).catch(() => {});
+  }
+
+  function initNotifications() {
+    updateNotifUI();
+    registerServiceWorker().then(() => {
+      clearShownNotifications();
+      if (pushSupported() && vapidConfigured() && notifPermission() === 'granted') {
+        return fetchPushToken().then(t => t && saveTokenRecord(t));
+      }
+    }).catch((e) => console.warn('push init error', e)).then(updateNotifUI);
+  }
+
+  // Ask the server to fan the message out as push notifications.
+  function notifyServer(key, attempt) {
+    if (!key) return;
+    fetch(NOTIFY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, uid: myUid }),
+      keepalive: true
+    }).then((r) => {
+      if (!r.ok && r.status >= 500 && !attempt) throw new Error('retry');
+    }).catch(() => {
+      if (!attempt) setTimeout(() => notifyServer(key, 1), 3000);
+    });
+  }
+
+  // ---------- In-app sounds (WebAudio, no files) ----------
+  function getAudioCtx() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) { try { audioCtx = new AC(); } catch (e) {} }
+    }
+    return audioCtx;
+  }
+  function unlockAudio() {
+    const ctx = getAudioCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+  }
+  ['pointerdown', 'touchstart', 'keydown'].forEach(ev =>
+    document.addEventListener(ev, unlockAudio, { passive: true }));
+
+  function tone(ctx, freq, start, dur, vol, type) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(vol, start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(start);
+    osc.stop(start + dur + 0.03);
+  }
+
+  function playSound(kind) {
+    if (muteMode === 'all') return;
+    if (kind === 'message' && muteMode === 'normal') return;
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const t = ctx.currentTime + 0.02;
+    if (kind === 'reply') {
+      tone(ctx, 784, t, 0.16, 0.22);
+      tone(ctx, 988, t + 0.11, 0.16, 0.22);
+      tone(ctx, 1319, t + 0.22, 0.38, 0.24);
+      tone(ctx, 2637, t + 0.22, 0.30, 0.04, 'triangle');
+    } else {
+      tone(ctx, 880, t, 0.14, 0.15);
+      tone(ctx, 1175, t + 0.09, 0.28, 0.15);
+    }
+  }
+
+  function isReplyToMe(data) {
+    if (!data || !data.replyTo || !data.replyTo.key) return Promise.resolve(false);
+    const entry = allMessagesByKey.get(data.replyTo.key);
+    if (entry) return Promise.resolve(entry.data.senderUid === myUid);
+    return messagesRef.child(data.replyTo.key + '/senderUid').once('value')
+      .then(s => s.val() === myUid).catch(() => false);
+  }
+
+  function handleIncomingForSound(data) {
+    if (!data || data.deleted) return;
+    if (document.visibilityState !== 'visible') return; // hidden: the push notification handles it
+    isReplyToMe(data).then(r => playSound(r ? 'reply' : 'message'));
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') clearShownNotifications();
+  });
+  window.addEventListener('focus', clearShownNotifications);
+
+  // ---------- Notification settings UI ----------
+  function updateNotifUI() {
+    const supported = pushSupported();
+    const configured = vapidConfigured();
+    const perm = notifPermission();
+    const iosInstall = needsIOSInstall();
+
+    let status = '';
+    let canEnable = false;
+    if (iosInstall) {
+      status = 'لاستقبال الإشعارات على الآيفون: اضغط زر المشاركة ثم "إضافة إلى الشاشة الرئيسية"، وافتح الموقع من الأيقونة الجديدة.';
+    } else if (!supported) {
+      status = 'هذا المتصفح لا يدعم الإشعارات. جرّب Chrome أو Safari (بعد إضافته للشاشة الرئيسية).';
+    } else if (!configured) {
+      status = 'الإشعارات غير مهيأة بعد (مفتاح VAPID غير مضاف في app.js).';
+    } else if (perm === 'granted') {
+      status = pushToken ? 'الإشعارات مفعّلة على هذا الجهاز.' : 'جارٍ تفعيل الإشعارات...';
+    } else if (perm === 'denied') {
+      status = 'الإشعارات محظورة. فعّلها من إعدادات المتصفح أو الموقع ثم أعد فتح الصفحة.';
+    } else {
+      status = 'فعّل الإشعارات لتصلك الرسائل حتى لو كان الموقع أو المتصفح مغلقًا.';
+      canEnable = true;
+    }
+    notifStatus.textContent = status;
+    notifEnableBtn.style.display = canEnable ? 'block' : 'none';
+
+    [...notifOptions.children].forEach(b => b.classList.toggle('active', b.dataset.mode === muteMode));
+    notifBtn.classList.toggle('muted', muteMode === 'all');
+    notifDot.style.display = canEnable ? 'block' : 'none';
+
+    let closed = false;
+    try { closed = localStorage.getItem(LS_BANNER_KEY) === '1'; } catch (e) {}
+    if (!closed && (canEnable || iosInstall)) {
+      notifBannerText.textContent = canEnable
+        ? 'فعّل الإشعارات لتصلك الرسائل حتى والموقع مغلق'
+        : 'أضف الموقع إلى الشاشة الرئيسية لتفعيل الإشعارات';
+      notifBannerBtn.style.display = canEnable ? 'block' : 'none';
+      notifBanner.style.display = 'flex';
+    } else {
+      notifBanner.style.display = 'none';
+    }
+  }
+
+  notifBtn.addEventListener('click', () => { updateNotifUI(); notifSheetBackdrop.style.display = 'flex'; });
+  notifSheetBackdrop.addEventListener('click', (e) => {
+    if (e.target === notifSheetBackdrop) notifSheetBackdrop.style.display = 'none';
+  });
+  notifOptions.addEventListener('click', (e) => {
+    const btn = e.target.closest('.notif-opt');
+    if (btn) setMuteMode(btn.dataset.mode);
+  });
+  notifEnableBtn.addEventListener('click', enableNotifications);
+  notifBannerBtn.addEventListener('click', enableNotifications);
+  notifBannerClose.addEventListener('click', () => {
+    try { localStorage.setItem(LS_BANNER_KEY, '1'); } catch (e) {}
+    notifBanner.style.display = 'none';
+  });
+
+  // ========================================================
   // Init
   // ========================================================
   function init() {
     loadIdentity();
+    loadMuteMode();
     initFirebase();
     buildEmojiPanel();
     updateConnectionUI();
