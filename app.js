@@ -32,7 +32,7 @@
 
   // Firebase Console > Project settings > Cloud Messaging > Web Push certificates
   // > Generate key pair  -> paste the PUBLIC key here.
-  const VAPID_KEY = 'PUT_YOUR_VAPID_KEY_HERE';
+  const VAPID_KEY = 'BGlc_HcdcSEwssUo5AdcZYNQzvYvciQuka8TfDp-sbNdJkl7QYCesAbyfZKrIgXG6N6wWrtSCK1mpZs3A__XH6Y';
   const NOTIFY_ENDPOINT = '/api/notify';
 
   // ---------- DOM ----------
