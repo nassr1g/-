@@ -729,7 +729,7 @@
     ctxCloseTimer = setTimeout(() => { if (ctxMenuEl) ctxMenuEl.innerHTML = ''; }, 160);
   }
 
-  function openContextMenu(row, key, data, mine, point) {
+    function openContextMenu(row, key, data, mine, point) {
     ensureCtxDom();
     clearTimeout(ctxCloseTimer);
     ctxMenuEl.classList.remove('show');
@@ -776,29 +776,24 @@
     document.body.appendChild(ctxBackdropEl);
     document.body.appendChild(ctxMenuEl);
 
-    // position: adjusted for accurate alignment near right/left messages
-    const menuWidth = 260; // العرض التقديري للقائمة
+    // التعديل هنا لضبط مكان القائمة وتجنب الانقسام للرسائل اليمنى واليسرى
+    const menuWidth = 270;
     let left, top;
+    const rowEl = row.getBoundingClientRect();
 
-    // إذا كانت رسالة المستخدم (اليمين)، نجعل القائمة تتمحور من جهة اليمين بناءً على مكان النقر
     if (mine) {
-      left = point.x - menuWidth + 20; // إزاحة لتبقى مقبولة بجانب الرسالة اليمنى
+      left = rowEl.right - menuWidth;
     } else {
-      left = point.x - 20;
+      left = rowEl.left;
     }
 
-    // التأكد من أن القائمة لا تخرج أبداً عن حدود الشاشة (يمين أو يسار)
-    left = Math.max(12, Math.min(left, window.innerWidth - menuWidth - 12));
+    left = Math.max(10, Math.min(left, window.innerWidth - menuWidth - 10));
 
-    // تحديد الموضع العمودي (فوق أو تحت نقطة اللمس)
-    top = point.y - 70;
+    top = rowEl.top - 75;
     const estHeight = 220;
-    
-    // إذا لم يكن هناك مساحة كافية بالأعلى، اجعلها تظهر تحت إصبع المستخدم
     if (top < 10) {
-      top = point.y + 15;
+      top = rowEl.bottom + 10;
     }
-
     ctxMenuEl.style.left = left + 'px';
     ctxMenuEl.style.top = top + 'px';
 
