@@ -26,11 +26,13 @@
 
   // Fewer, much bigger blobs (radius ~90-130% of the larger viewport
   // dimension) so each one reads as a clear, dominant wash of color like
-  // a soft nebula - not a handful of small faint dots.
+  // a soft nebula - not a handful of small faint dots. Frequencies are
+  // fast enough that motion is obvious within a second, not just over
+  // many seconds - a full drift cycle takes roughly 5-7 seconds.
   const blobs = [
-    { color: [107, 48, 172],  cx: 0.22, cy: 0.28, ax: 0.16, ay: 0.12, freqX: 0.000085, freqY: 0.00011,  phase: 0.0, rBase: 1.05, rAmp: 0.12, rFreq: 0.00009 },
-    { color: [60, 24, 110],   cx: 0.80, cy: 0.70, ax: 0.14, ay: 0.16, freqX: -0.00010, freqY: 0.000095, phase: 2.1, rBase: 0.95, rAmp: 0.10, rFreq: 0.00011 },
-    { color: [130, 58, 190],  cx: 0.55, cy: 0.92, ax: 0.18, ay: 0.10, freqX: 0.000075, freqY: -0.00012, phase: 4.2, rBase: 0.85, rAmp: 0.11, rFreq: 0.00008 }
+    { color: [107, 48, 172],  cx: 0.22, cy: 0.28, ax: 0.22, ay: 0.18, freqX: 0.00075, freqY: 0.00095,  phase: 0.0, rBase: 1.05, rAmp: 0.16, rFreq: 0.0009 },
+    { color: [60, 24, 110],   cx: 0.80, cy: 0.70, ax: 0.20, ay: 0.22, freqX: -0.00085, freqY: 0.0008, phase: 2.1, rBase: 0.95, rAmp: 0.14, rFreq: 0.0011 },
+    { color: [130, 58, 190],  cx: 0.55, cy: 0.92, ax: 0.24, ay: 0.16, freqX: 0.00065, freqY: -0.001, phase: 4.2, rBase: 0.85, rAmp: 0.15, rFreq: 0.0008 }
   ];
 
   let raf = null;
