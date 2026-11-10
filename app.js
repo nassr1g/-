@@ -729,7 +729,7 @@
     ctxCloseTimer = setTimeout(() => { if (ctxMenuEl) ctxMenuEl.innerHTML = ''; }, 160);
   }
 
-    function openContextMenu(row, key, data, mine, point) {
+      function openContextMenu(row, key, data, mine, point) {
     ensureCtxDom();
     clearTimeout(ctxCloseTimer);
     ctxMenuEl.classList.remove('show');
@@ -776,24 +776,26 @@
     document.body.appendChild(ctxBackdropEl);
     document.body.appendChild(ctxMenuEl);
 
-    // التعديل هنا لضبط مكان القائمة وتجنب الانقسام للرسائل اليمنى واليسرى
+    // الحسابات المضبوطة للطرفين (اليمين واليسار)
     const menuWidth = 270;
     let left, top;
     const rowEl = row.getBoundingClientRect();
 
     if (mine) {
+      // رسالتك (يمين)
       left = rowEl.right - menuWidth;
     } else {
+      // رسالة الشخص الثاني (يسار) - تبدأ من حافة رسالته تماماً
       left = rowEl.left;
     }
 
     left = Math.max(10, Math.min(left, window.innerWidth - menuWidth - 10));
 
     top = rowEl.top - 75;
-    const estHeight = 220;
     if (top < 10) {
       top = rowEl.bottom + 10;
     }
+    
     ctxMenuEl.style.left = left + 'px';
     ctxMenuEl.style.top = top + 'px';
 
