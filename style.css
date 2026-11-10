@@ -391,8 +391,8 @@ body {
   z-index: 50;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  width: 270px;
+  align-items: flex-start;
+  width: max-content;
   opacity: 0;
   transform: scale(.92) translateY(6px);
   transition: opacity .16s cubic-bezier(.2,.8,.3,1), transform .16s cubic-bezier(.2,.8,.3,1);
@@ -410,7 +410,7 @@ body {
   padding: 7px 9px;
   box-shadow: var(--shadow-1);
   margin-bottom: 8px;
-  align-self: flex-end;
+  align-self: flex-start;
 }
 
 .ctx-reactions span {
