@@ -22,7 +22,7 @@
   window.addEventListener('resize', resize);
   resize();
 
-  const BASE = '#0f0818';
+  const BASE = '#0b0613';
 
   // Fewer, much bigger blobs (radius ~90-130% of the larger viewport
   // dimension) so each one reads as a clear, dominant wash of color like
@@ -57,10 +57,11 @@
       const radius = rPulse * maxDim * 0.62;
       const [r, g, bl] = b.color;
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
-      grad.addColorStop(0,   `rgba(${r},${g},${bl},0.95)`);
-      grad.addColorStop(0.35, `rgba(${r},${g},${bl},0.55)`);
-      grad.addColorStop(0.7, `rgba(${r},${g},${bl},0.18)`);
-      grad.addColorStop(1,   `rgba(${r},${g},${bl},0)`);
+      grad.addColorStop(0,    `rgba(${r},${g},${bl},0.92)`);
+      grad.addColorStop(0.28, `rgba(${r},${g},${bl},0.62)`);
+      grad.addColorStop(0.55, `rgba(${r},${g},${bl},0.28)`);
+      grad.addColorStop(0.8,  `rgba(${r},${g},${bl},0.08)`);
+      grad.addColorStop(1,    `rgba(${r},${g},${bl},0)`);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
     });

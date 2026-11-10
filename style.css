@@ -5,6 +5,10 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600&display=swap');
 
+html {
+  color-scheme: dark;
+}
+
 :root {
   --bg-1: #0f0818;
   --bg-2: #160d24;
