@@ -776,15 +776,29 @@
     document.body.appendChild(ctxBackdropEl);
     document.body.appendChild(ctxMenuEl);
 
-    // position: near the tap/press point, kept inside viewport
-    const menuWidth = 250;
-    let left = point.x - (mine ? menuWidth : 0);
-    left = Math.max(10, Math.min(left, window.innerWidth - menuWidth - 10));
-    let top = point.y + 10;
-    const estHeight = 220;
-    if (top + estHeight > window.innerHeight - 10) {
-      top = Math.max(10, point.y - estHeight - 10);
+    // position: adjusted for accurate alignment near right/left messages
+    const menuWidth = 260; // العرض التقديري للقائمة
+    let left, top;
+
+    // إذا كانت رسالة المستخدم (اليمين)، نجعل القائمة تتمحور من جهة اليمين بناءً على مكان النقر
+    if (mine) {
+      left = point.x - menuWidth + 20; // إزاحة لتبقى مقبولة بجانب الرسالة اليمنى
+    } else {
+      left = point.x - 20;
     }
+
+    // التأكد من أن القائمة لا تخرج أبداً عن حدود الشاشة (يمين أو يسار)
+    left = Math.max(12, Math.min(left, window.innerWidth - menuWidth - 12));
+
+    // تحديد الموضع العمودي (فوق أو تحت نقطة اللمس)
+    top = point.y - 70;
+    const estHeight = 220;
+    
+    // إذا لم يكن هناك مساحة كافية بالأعلى، اجعلها تظهر تحت إصبع المستخدم
+    if (top < 10) {
+      top = point.y + 15;
+    }
+
     ctxMenuEl.style.left = left + 'px';
     ctxMenuEl.style.top = top + 'px';
 
