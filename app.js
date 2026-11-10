@@ -729,7 +729,7 @@
     ctxCloseTimer = setTimeout(() => { if (ctxMenuEl) ctxMenuEl.innerHTML = ''; }, 160);
   }
 
-            function openContextMenu(row, key, data, mine, point) {
+              function openContextMenu(row, key, data, mine, point) {
     ensureCtxDom();
     clearTimeout(ctxCloseTimer);
     ctxMenuEl.classList.remove('show');
@@ -776,19 +776,11 @@
     document.body.appendChild(ctxBackdropEl);
     document.body.appendChild(ctxMenuEl);
 
-    // الحل المباشر لموضع اللمس للطرفين
+    // التعديل النهائي المباشر لموقع القائمة للطرفين
     const menuWidth = 260;
-    let left;
+    const rowEl = row.getBoundingClientRect();
+    let left = mine ? (rowEl.right - menuWidth) : rowEl.left;
 
-    if (mine) {
-      // رسالتك (يمين) - محاذاة قريبة من مكان الضغط
-      left = point.x - menuWidth + 40;
-    } else {
-      // رسالة الطرف الآخر (يسار) - تبدأ مباشرة من تحت الإصبع بمسافة بسيطة جداً
-      left = point.x - 10;
-    }
-
-    // حماية القائمة لتظل داخل الشاشة تماماً
     left = Math.max(10, Math.min(left, window.innerWidth - menuWidth - 10));
 
     let top = point.y + 10;
