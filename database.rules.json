@@ -2,17 +2,15 @@
   "rules": {
     ".read": false,
     ".write": false,
-
     "chat": {
       "messages": {
         ".read": true,
-        ".indexOn": ["timestamp"],
-
+        ".indexOn": [
+          "timestamp"
+        ],
         "$messageId": {
-          ".write": "!data.exists() || (data.exists() && !data.child('deleted').exists() && newData.hasChildren(['deleted','deletedAt']) && newData.child('text').val() === data.child('text').val() && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val()) || (data.exists() && !data.child('deleted').exists() && newData.hasChildren(['edited','editedAt']) && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val())",
-
+          ".write": "!data.exists() || (data.exists() && !data.child('deleted').exists() && newData.hasChildren(['deleted','deletedAt']) && newData.child('text').val() === data.child('text').val() && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val()) || (data.exists() && !data.child('deleted').exists() && newData.hasChildren(['edited','editedAt']) && newData.child('editedAt').val() === now && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val())",
           ".validate": "newData.hasChildren(['text','senderUid','senderName','timestamp'])",
-
           "text": {
             ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000"
           },
@@ -27,12 +25,19 @@
           },
           "replyTo": {
             ".validate": "newData.hasChildren(['key','sender','text'])",
-            "key": { ".validate": "newData.isString()" },
-            "sender": { ".validate": "newData.isString() && newData.val().length <= 20" },
-            "text": { ".validate": "newData.isString() && newData.val().length <= 120" },
-            "$other": { ".validate": false }
+            "key": {
+              ".validate": "newData.isString()"
+            },
+            "sender": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length <= 120"
+            },
+            "$other": {
+              ".validate": false
+            }
           },
-
           "deleted": {
             ".validate": "newData.isBoolean() && newData.val() === true"
           },
@@ -45,70 +50,113 @@
           "editedAt": {
             ".validate": "newData.val() === now"
           },
-
           "reactions": {
-            "$emoji": {
-              "$uid": {
-                ".write": true,
-                ".validate": "newData.hasChildren(['name','ts']) && newData.child('name').isString() && newData.child('name').val().length <= 20",
-                "name": { ".validate": "newData.isString() && newData.val().length <= 20" },
-                "ts": { ".validate": true },
-                "$other": { ".validate": false }
+            ".write": false,
+            ".validate": "data.exists()"
+          },
+          "react": {
+            "$uid": {
+              ".write": true,
+              ".validate": "newData.hasChildren(['emoji','name','ts'])",
+              "emoji": {
+                ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 16"
+              },
+              "name": {
+                ".validate": "newData.isString() && newData.val().length <= 20"
+              },
+              "ts": {
+                ".validate": "newData.val() === now"
+              },
+              "$other": {
+                ".validate": false
               }
             }
           },
-
-          "$other": { ".validate": false }
+          "$other": {
+            ".validate": false
+          }
         }
       },
-
       "events": {
         ".read": true,
-        ".indexOn": ["timestamp"],
+        ".indexOn": [
+          "timestamp"
+        ],
         "$eventId": {
           ".write": "!data.exists()",
           ".validate": "newData.hasChildren(['type','name','senderUid','timestamp']) && newData.child('type').val() === 'join'",
-          "type": { ".validate": "newData.val() === 'join'" },
-          "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20" },
-          "senderUid": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
-          "timestamp": { ".validate": "newData.val() === now" },
-          "$other": { ".validate": false }
+          "type": {
+            ".validate": "newData.val() === 'join'"
+          },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 20"
+          },
+          "senderUid": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+          },
+          "timestamp": {
+            ".validate": "newData.val() === now"
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       },
-
       "presence": {
         ".read": true,
         "$uid": {
           ".write": true,
           ".validate": "newData.hasChildren(['name','online'])",
-          "name": { ".validate": "newData.isString() && newData.val().length <= 20" },
-          "online": { ".validate": "newData.isBoolean()" },
-          "lastSeen": { ".validate": true },
-          "$other": { ".validate": false }
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "online": {
+            ".validate": "newData.isBoolean()"
+          },
+          "lastSeen": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       },
-
       "push": {
         ".read": false,
         "$token": {
           ".write": true,
           ".validate": "newData.hasChildren(['uid','name','mute','ts'])",
-          "uid": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100" },
-          "name": { ".validate": "newData.isString() && newData.val().length <= 20" },
-          "mute": { ".validate": "newData.val() === 'none' || newData.val() === 'normal' || newData.val() === 'all'" },
-          "ts": { ".validate": true },
-          "$other": { ".validate": false }
+          "uid": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+          },
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "mute": {
+            ".validate": "newData.val() === 'none' || newData.val() === 'normal' || newData.val() === 'all'"
+          },
+          "ts": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       },
-
       "typing": {
         ".read": true,
         "$uid": {
           ".write": true,
           ".validate": "newData.hasChildren(['name','ts'])",
-          "name": { ".validate": "newData.isString() && newData.val().length <= 20" },
-          "ts": { ".validate": true },
-          "$other": { ".validate": false }
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "ts": {
+            ".validate": true
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     }

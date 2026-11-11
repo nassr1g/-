@@ -72,6 +72,7 @@
   const emojiGrid = $('emojiGrid');
   const typingRow = $('typingRow');
   const typingNames = $('typingNames');
+  const connText = $('connText');
 
   const notifBtn = $('notifBtn');
   const notifDot = $('notifDot');
@@ -83,7 +84,7 @@
   const notifBannerText = $('notifBannerText');
   const notifBannerBtn = $('notifBannerBtn');
   const notifBannerClose = $('notifBannerClose');
-  const sendSoundToggle = $('sendSoundToggle');
+  const chatTonesToggle = $('chatTonesToggle');
   const installBanner = $('installBanner');
   const installBtn = $('installBtn');
   const installClose = $('installClose');
@@ -226,13 +227,18 @@
   // ========================================================
   // Connection + presence
   // ========================================================
+  let connTimer = null;
   function updateConnectionUI() {
+    clearTimeout(connTimer);
     if (isConnected && firebaseReady) {
       statusDot.classList.remove('off');
       sendBtn.disabled = false;
+      // hide the "connecting" label only once the connection has held steady
+      connTimer = setTimeout(() => connText.classList.remove('show'), 700);
     } else {
       statusDot.classList.add('off');
       sendBtn.disabled = true;
+      connText.classList.add('show');
     }
   }
 
@@ -331,6 +337,7 @@
   function autoGrow() {
     messageInput.style.height = 'auto';
     messageInput.style.height = Math.min(messageInput.scrollHeight, 110) + 'px';
+    sendBtn.classList.toggle('empty', !messageInput.value.trim());
   }
 
   // ========================================================
@@ -420,7 +427,7 @@
       const keys = Object.keys(val).sort((a, b) => (val[a].timestamp||0) - (val[b].timestamp||0));
 
       const prevHeight = messagesWrap.scrollHeight;
-      keys.forEach(key => renderMessage(key, val[key], false, true));
+      keys.slice().reverse().forEach(key => renderMessage(key, val[key], false, true));
 
       if (keys.length > 0) oldestLoadedKey = keys[0];
       hasMoreHistory = keys.length === PAGE_SIZE;
@@ -498,6 +505,15 @@
     }
   }
   jumpBottomBtn.addEventListener('click', scrollToBottom);
+
+  // Stay pinned to the newest message when the chat area changes size
+  // (keyboard opens, reply bar appears, banner closes) - but only if the
+  // reader was already at the bottom.
+  let pinnedToBottom = true;
+  messagesWrap.addEventListener('scroll', () => { pinnedToBottom = isNearBottom(); }, { passive: true });
+  if (window.ResizeObserver) {
+    new ResizeObserver(() => { if (pinnedToBottom) messagesWrap.scrollTop = messagesWrap.scrollHeight; }).observe(messagesWrap);
+  }
   messagesWrap.addEventListener('scroll', () => {
     if (isNearBottom()) {
       jumpBottomBtn.classList.remove('show');
@@ -606,11 +622,41 @@
     welcomeCard.style.display = 'none';
 
     if (!isDeleted) {
-      db.ref(`chat/messages/${key}/reactions`).on('value', (snap) => {
-        updateReactionsUI(key, snap.val() || {});
+      db.ref(`chat/messages/${key}/react`).on('value', (snap) => {
+        updateReactionsUI(key, reactMap(snap.val()));
       });
-      if (data.reactions) updateReactionsUI(key, data.reactions);
+      if (data.react) updateReactionsUI(key, reactMap(data.react));
     }
+  }
+
+  // Smoothly swaps a bubble's content: old content fades, the bubble morphs
+  // (height + width) to its new size, new content fades in.
+  function swapBubble(bubble, mutate, done) {
+    // one morph at a time per bubble; later changes wait their turn
+    if (bubble._swapping) { bubble._queued = () => swapBubble(bubble, mutate, done); return; }
+    bubble._swapping = true;
+    bubble.classList.add('swap-out');
+    setTimeout(() => {
+      const h0 = bubble.offsetHeight, w0 = bubble.offsetWidth;
+      mutate();
+      bubble.classList.remove('swap-out');
+      const h1 = bubble.offsetHeight, w1 = bubble.offsetWidth;
+      bubble.classList.add('swap-in');
+      bubble.style.overflow = 'hidden';
+      bubble.style.height = h0 + 'px';
+      bubble.style.width = w0 + 'px';
+      void bubble.offsetWidth;
+      bubble.style.transition = 'height .32s cubic-bezier(.2,.8,.3,1), width .32s cubic-bezier(.2,.8,.3,1), opacity .3s ease';
+      bubble.style.height = h1 + 'px';
+      bubble.style.width = w1 + 'px';
+      setTimeout(() => {
+        bubble.classList.remove('swap-in');
+        bubble.style.height = bubble.style.width = bubble.style.overflow = bubble.style.transition = '';
+        bubble._swapping = false;
+        if (done) done();
+        if (bubble._queued) { const q = bubble._queued; bubble._queued = null; q(); }
+      }, 360);
+    }, 190);
   }
 
   function updateExistingMessage(key, data) {
@@ -618,57 +664,63 @@
     if (!entry) return;
     const wasDeleted = !!entry.data.deleted;
     const nowDeleted = !!data.deleted;
+    const prevText = entry.data.text;
     entry.data = data;
+    if (wasDeleted) return;
 
-    if (!wasDeleted && nowDeleted) {
-      // Turn the existing bubble into the "deleted" placeholder in place,
-      // without tearing down and rebuilding the whole row.
-      db.ref(`chat/messages/${key}/reactions`).off('value');
-
+    if (nowDeleted) {
+      db.ref(`chat/messages/${key}/react`).off('value');
       const row = entry.el;
-      const shell = row.querySelector('.msg-bubble-shell');
       const bubble = row.querySelector('.msg-bubble');
       const reactionsRow = row.querySelector('.reactions-row');
       const swipeIcon = row.querySelector('.reply-swipe-icon');
-
       if (reactionsRow) reactionsRow.remove();
       if (swipeIcon) swipeIcon.remove();
+      if (!bubble) return;
 
-      bubble.innerHTML = '';
-      bubble.classList.add('deleted');
-      bubble.appendChild(trashGlyph());
-      const textDiv = document.createElement('div');
-      textDiv.className = 'msg-text';
-      textDiv.textContent = 'تم حذف هذه الرسالة';
-      bubble.appendChild(textDiv);
-      const meta = document.createElement('div');
-      meta.className = 'msg-meta';
-      meta.textContent = formatTime(data.timestamp);
-      bubble.appendChild(meta);
-
-      // swap in a plain clone to drop all gesture/pointer listeners cleanly
-      const freshRow = row.cloneNode(true);
-      row.replaceWith(freshRow);
-      allMessagesByKey.set(key, { data, el: freshRow });
+      swapBubble(bubble, () => {
+        bubble.innerHTML = '';
+        bubble.classList.add('deleted');
+        bubble.appendChild(trashGlyph());
+        const textDiv = document.createElement('div');
+        textDiv.className = 'msg-text';
+        textDiv.textContent = 'تم حذف هذه الرسالة';
+        bubble.appendChild(textDiv);
+        const meta = document.createElement('div');
+        meta.className = 'msg-meta';
+        meta.textContent = formatTime(data.timestamp);
+        bubble.appendChild(meta);
+      }, () => {
+        // swap in a plain clone to drop all gesture/pointer listeners cleanly
+        const cur = allMessagesByKey.get(key);
+        const freshRow = row.cloneNode(true);
+        row.replaceWith(freshRow);
+        allMessagesByKey.set(key, { data: cur ? cur.data : data, el: freshRow });
+      });
       return;
     }
 
-    if (!nowDeleted && data.edited) {
-      // Text-only edit: update the bubble's text content in place. No need
-      // to rebuild the row - gestures, reactions listeners etc. stay valid.
-      const row = entry.el;
-      const bubble = row.querySelector('.msg-bubble');
+    if (data.edited) {
+      const bubble = entry.el.querySelector('.msg-bubble');
       if (!bubble) return;
-      let textDiv = bubble.querySelector('.msg-text');
-      if (textDiv) {
-        textDiv.textContent = data.text || '';
-      }
-      if (!bubble.querySelector('.msg-edited-tag')) {
-        const meta = bubble.querySelector('.msg-meta');
-        const tag = document.createElement('span');
-        tag.className = 'msg-edited-tag';
-        tag.textContent = '(معدّلة)';
-        if (meta) bubble.insertBefore(tag, meta); else bubble.appendChild(tag);
+      const apply = () => {
+        const textDiv = bubble.querySelector('.msg-text');
+        if (textDiv) textDiv.textContent = data.text || '';
+        if (!bubble.querySelector('.msg-edited-tag')) {
+          const meta = bubble.querySelector('.msg-meta');
+          const tag = document.createElement('span');
+          tag.className = 'msg-edited-tag';
+          tag.textContent = '(معدّلة)';
+          if (meta) bubble.insertBefore(tag, meta); else bubble.appendChild(tag);
+        }
+      };
+      if (prevText !== data.text) {
+        swapBubble(bubble, apply, () => {
+          bubble.classList.add('edit-glow');
+          setTimeout(() => bubble.classList.remove('edit-glow'), 950);
+        });
+      } else if (!bubble._swapping) {
+        apply();
       }
     }
   }
@@ -694,7 +746,12 @@
   function jumpToMessage(key) {
     const entry = allMessagesByKey.get(key);
     if (!entry) return;
-    entry.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Scroll ONLY the messages container (scrollIntoView also scrolls the page
+    // itself, which pushed the header up and the composer away from the keyboard).
+    const wrapRect = messagesWrap.getBoundingClientRect();
+    const elRect = entry.el.getBoundingClientRect();
+    const delta = (elRect.top + elRect.height / 2) - (wrapRect.top + wrapRect.height / 2);
+    messagesWrap.scrollBy({ top: delta, behavior: 'smooth' });
     const bubble = entry.el.querySelector('.msg-bubble');
     bubble.classList.remove('highlight');
     void bubble.offsetWidth;
@@ -1001,26 +1058,33 @@
   // Sending / editing messages
   // ========================================================
   function sendMessage() {
-    const raw = messageInput.value;
-    const text = sanitizeMessage(raw).trim();
+    const text = sanitizeMessage(messageInput.value).trim();
     if (!text) return;
     if (!firebaseReady || !isConnected) {
       showSystemError('لا يمكن إرسال الرسالة. تحقق من الاتصال بالإنترنت.');
       return;
     }
 
+    // Clear the composer the instant send is pressed (optimistic) and keep the
+    // keyboard open; if sending fails the text is put back.
+    const restore = () => { if (!messageInput.value) { messageInput.value = text; autoGrow(); } };
+    clearTimeout(typingDebounce);
+    clearTimeout(typingTimeoutLocal);
+    typingRef.child(myUid).remove();
+    messageInput.value = '';
+    autoGrow();
+    messageInput.focus({ preventScroll: true });
+
     if (editingKey) {
       const key = editingKey;
+      cancelEdit();
       db.ref(`chat/messages/${key}`).update({
         text,
         edited: true,
         editedAt: firebase.database.ServerValue.TIMESTAMP
-      }).then(() => {
-        messageInput.value = '';
-        autoGrow();
-        cancelEdit();
       }).catch((err) => {
         console.error('edit error', err);
+        restore();
         showSystemError('تعذر تعديل الرسالة');
       });
       return;
@@ -1039,24 +1103,24 @@
         text: activeReply.text.slice(0, 120)
       };
     }
+    cancelReply();
 
     const newRef = messagesRef.push(payload);
     playSound('send');
+    sendBtn.classList.remove('pop');
+    void sendBtn.offsetWidth;
+    sendBtn.classList.add('pop');
+    if (navigator.vibrate) navigator.vibrate(30);
     newRef.then(() => {
-      messageInput.value = '';
-      autoGrow();
-      cancelReply();
-      sendBtn.classList.remove('pop');
-      void sendBtn.offsetWidth;
-      sendBtn.classList.add('pop');
-      if (navigator.vibrate) navigator.vibrate(30);
-      typingRef.child(myUid).remove();
       notifyServer(newRef.key);
     }).catch((err) => {
       console.error('send error', err);
+      restore();
       showSystemError('فشل في إرسال الرسالة');
     });
   }
+  // Tapping the send button must not steal focus from the text box (keeps the keyboard open)
+  ['pointerdown', 'mousedown'].forEach((ev) => sendBtn.addEventListener(ev, (e) => e.preventDefault()));
   sendBtn.addEventListener('click', sendMessage);
   messageInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
@@ -1089,22 +1153,33 @@
     openEmojiPanel();
   }
 
-  function toggleMyReaction(key, emoji) {
-    const reactionRef = db.ref(`chat/messages/${key}/reactions/${emoji}/${myUid}`);
-    reactionRef.once('value').then(snap => {
-      if (snap.exists()) reactionRef.remove();
-      else {
-        reactionRef.set({ name: myName, ts: firebase.database.ServerValue.TIMESTAMP }).then(() => {
-          const e = allMessagesByKey.get(key);
-          if (e && e.data.senderUid !== myUid) notifyServer(key, 0, emoji);
-        });
-      }
+  // One reaction per person per message. Stored at react/<uid> = {emoji,name,ts},
+  // so Firebase's own structure makes a second reaction from the same uid impossible.
+  function reactMap(react) {
+    const m = {};
+    Object.keys(react || {}).forEach((uid) => {
+      const v = react[uid];
+      if (v && v.emoji) { (m[v.emoji] = m[v.emoji] || {})[uid] = { name: v.name, ts: v.ts }; }
     });
+    return m;
+  }
+
+  function toggleMyReaction(key, emoji) {
+    const ref = db.ref(`chat/messages/${key}/react/${myUid}`);
+    ref.once('value').then((snap) => {
+      const cur = snap.val();
+      if (cur && cur.emoji === emoji) return ref.remove();
+      return ref.set({ emoji, name: myName, ts: firebase.database.ServerValue.TIMESTAMP }).then(() => {
+        const e = allMessagesByKey.get(key);
+        if (e && e.data.senderUid !== myUid) notifyServer(key, 0, emoji);
+      });
+    }).catch((err) => console.error('reaction error', err));
   }
 
   function updateReactionsUI(key, reactions) {
     const entry = allMessagesByKey.get(key);
     if (!entry) return;
+    detectNewReactions(key, reactions, entry);
     const reactionsRow = entry.el.querySelector('.reactions-row');
     if (!reactionsRow) return;
     reactionsRow.innerHTML = '';
@@ -1229,7 +1304,9 @@
   let messaging = null;
   let pushToken = null;
   let audioCtx = null;
-  let sendSoundOn = true;
+  let chatTonesOn = true;
+  let notifBannerHidden = false;
+  let installBannerHidden = false;
   let deferredInstall = null;
 
   function isStandalone() {
@@ -1249,7 +1326,7 @@
     try {
       const v = localStorage.getItem(LS_MUTE_KEY);
       if (v === 'normal' || v === 'all') muteMode = v;
-      sendSoundOn = localStorage.getItem(LS_SENDSND_KEY) !== '0';
+      chatTonesOn = localStorage.getItem(LS_SENDSND_KEY) !== '0';
     } catch (e) {}
   }
 
@@ -1368,9 +1445,8 @@
   }
 
   function playSound(kind) {
-    if (kind === 'send') {
-      if (!sendSoundOn) return;
-    } else {
+    if (!chatTonesOn) return;
+    if (kind === 'message' || kind === 'reply') {
       if (muteMode === 'all') return;
       if (kind === 'message' && muteMode === 'normal') return;
     }
@@ -1381,6 +1457,10 @@
     if (kind === 'send') {
       tone(ctx, 660, t, 0.09, 0.11);
       tone(ctx, 990, t + 0.06, 0.16, 0.09);
+    } else if (kind === 'react') {
+      tone(ctx, 1568, t, 0.10, 0.09);
+      tone(ctx, 2093, t + 0.07, 0.12, 0.09);
+      tone(ctx, 2637, t + 0.14, 0.24, 0.08, 'triangle');
     } else if (kind === 'reply') {
       tone(ctx, 784, t, 0.16, 0.22);
       tone(ctx, 988, t + 0.11, 0.16, 0.22);
@@ -1390,6 +1470,50 @@
       tone(ctx, 880, t, 0.14, 0.15);
       tone(ctx, 1175, t + 0.09, 0.28, 0.15);
     }
+  }
+
+  // ---------- Reaction effects: sound (reactor + message owner) + burst animation ----------
+  const reactSeen = new Map();
+  function detectNewReactions(key, reactions, entry) {
+    const now = new Set();
+    Object.keys(reactions || {}).forEach(em =>
+      Object.keys(reactions[em] || {}).forEach(uid => now.add(em + '|' + uid)));
+    const prev = reactSeen.get(key);
+    reactSeen.set(key, now);
+    if (!prev || entry.data.deleted) return; // first snapshot = baseline, no effects
+    now.forEach((id) => {
+      if (prev.has(id)) return;
+      const i = id.lastIndexOf('|');
+      const emoji = id.slice(0, i), uid = id.slice(i + 1);
+      if (document.visibilityState !== 'visible') return;
+      burstReaction(entry, emoji);
+      const byMe = uid === myUid;
+      const myMessage = entry.data.senderUid === myUid;
+      if (byMe || (myMessage && muteMode === 'none')) playSound('react');
+    });
+  }
+
+  function burstReaction(entry, emoji) {
+    const bubble = entry.el.querySelector('.msg-bubble');
+    if (!bubble) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'react-burst';
+    for (let i = 0; i < 7; i++) {
+      const s = document.createElement('span');
+      s.textContent = emoji;
+      s.style.setProperty('--dx', ((Math.random() - 0.5) * 100) + 'px');
+      s.style.setProperty('--dy', (-(45 + Math.random() * 70)) + 'px');
+      s.style.setProperty('--rot', ((Math.random() - 0.5) * 60) + 'deg');
+      s.style.fontSize = (15 + Math.random() * 11) + 'px';
+      s.style.animationDelay = (i * 45) + 'ms';
+      wrap.appendChild(s);
+    }
+    bubble.appendChild(wrap);
+    setTimeout(() => wrap.remove(), 1500);
+    requestAnimationFrame(() => {
+      const chip = [...entry.el.querySelectorAll('.reaction-chip')].find(c => c.firstChild && c.firstChild.textContent === emoji);
+      if (chip) chip.classList.add('pop');
+    });
   }
 
   function isReplyToMe(data) {
@@ -1405,6 +1529,10 @@
     if (document.visibilityState !== 'visible') return; // hidden: the push notification handles it
     isReplyToMe(data).then(r => playSound(r ? 'reply' : 'message'));
   }
+
+  document.addEventListener('pointerdown', (e) => {
+    if (emojiPanelOpen && !e.target.closest('.emoji-panel') && !e.target.closest('#emojiToggleBtn')) closeEmojiPanel();
+  }, true);
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') clearShownNotifications();
@@ -1441,9 +1569,7 @@
     notifBtn.classList.toggle('muted', muteMode === 'all');
     notifDot.style.display = canEnable ? 'block' : 'none';
 
-    let closed = false;
-    try { closed = localStorage.getItem(LS_BANNER_KEY) === '1'; } catch (e) {}
-    if (!closed && (canEnable || iosInstall)) {
+    if (!notifBannerHidden && (canEnable || iosInstall)) {
       notifBannerText.textContent = canEnable
         ? 'فعّل الإشعارات لتصلك الرسائل حتى والموقع مغلق'
         : 'أضف الموقع إلى الشاشة الرئيسية لتفعيل الإشعارات';
@@ -1452,7 +1578,7 @@
     } else {
       notifBanner.style.display = 'none';
     }
-    sendSoundToggle.classList.toggle('on', sendSoundOn);
+    chatTonesToggle.classList.toggle('on', chatTonesOn);
     updateInstallUI();
   }
 
@@ -1465,21 +1591,19 @@
     if (btn) setMuteMode(btn.dataset.mode);
   });
   notifEnableBtn.addEventListener('click', enableNotifications);
-  sendSoundToggle.addEventListener('click', () => {
-    sendSoundOn = !sendSoundOn;
-    try { localStorage.setItem(LS_SENDSND_KEY, sendSoundOn ? '1' : '0'); } catch (e) {}
+  chatTonesToggle.addEventListener('click', () => {
+    chatTonesOn = !chatTonesOn;
+    try { localStorage.setItem(LS_SENDSND_KEY, chatTonesOn ? '1' : '0'); } catch (e) {}
     updateNotifUI();
-    if (sendSoundOn) playSound('send');
+    if (chatTonesOn) playSound('send');
   });
 
   // ---------- Install prompt (our own, dismissible) ----------
-  function installDismissed() {
-    try { return localStorage.getItem(LS_INSTALL_KEY) === '1'; } catch (e) { return false; }
-  }
+  function installDismissed() { return installBannerHidden; }
   function updateInstallUI() {
     const can = !!deferredInstall && !isStandalone();
     installSheetBtn.style.display = can ? 'block' : 'none';
-    installBanner.style.display = (can && !installDismissed() && notifBanner.style.display === 'none') ? 'flex' : 'none';
+    installBanner.style.display = (can && !installDismissed()) ? 'flex' : 'none';
   }
   function promptInstall() {
     if (!deferredInstall) return;
@@ -1498,12 +1622,12 @@
   installBtn.addEventListener('click', promptInstall);
   installSheetBtn.addEventListener('click', () => { notifSheetBackdrop.style.display = 'none'; promptInstall(); });
   installClose.addEventListener('click', () => {
-    try { localStorage.setItem(LS_INSTALL_KEY, '1'); } catch (e) {}
+    installBannerHidden = true;
     installBanner.style.display = 'none';
   });
   notifBannerBtn.addEventListener('click', enableNotifications);
   notifBannerClose.addEventListener('click', () => {
-    try { localStorage.setItem(LS_BANNER_KEY, '1'); } catch (e) {}
+    notifBannerHidden = true;
     notifBanner.style.display = 'none';
   });
 

@@ -56,8 +56,11 @@ async function handlePush(d) {
   }
 
   if (d.type === 'reaction') {
-    await self.registration.showNotification(sender + ' • تفاعل على رسالتك', {
-      body: (d.emoji || '') + '  ' + text,
+    // Unicode isolates keep each piece (name / text / emoji) from mixing with the RTL sentence
+    const FSI = '\u2068', PDI = '\u2069';
+    const body = '\u200F' + 'تفاعل ' + FSI + sender + PDI + ' على "' + FSI + text + PDI + '" ب"' + FSI + (d.emoji || '') + PDI + '"';
+    await self.registration.showNotification(SITE_NAME, {
+      body,
       icon: ICON_REACT,
       badge: BADGE_REACT,
       tag: 'react-' + (d.key || ts) + '-' + sender,
