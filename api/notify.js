@@ -1,7 +1,7 @@
 /* Vercel serverless function: POST /api/notify
    - message/reply:  { key, uid }
    - reaction:       { type:'reaction', key, uid, emoji }
-   Reads everything from Firebase (client can't forge content), then sends
+   Requires a Firebase ID token (Authorization: Bearer). Reads everything from Firebase (client can't forge content), then sends
    high-urgency FCM web pushes. Env: FIREBASE_SERVICE_ACCOUNT (JSON). */
 const admin = require('firebase-admin');
 
@@ -106,8 +106,11 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
   try {
     init();
+    const mt = /^Bearer (.+)$/.exec(req.headers.authorization || '');
+    const decoded = mt ? await admin.auth().verifyIdToken(mt[1]).catch(() => null) : null;
+    if (!decoded || decoded.email_verified !== true) return res.status(401).json({ error: 'unauthorized' });
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-    const key = String(body.key || ''), uid = String(body.uid || '');
+    const key = String(body.key || ''), uid = decoded.uid;
     if (!/^[-\w]{10,40}$/.test(key) || !uid || uid.length > 100) return res.status(400).json({ error: 'bad-request' });
     const db = admin.database();
     const [code, out] = body.type === 'reaction'
