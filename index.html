@@ -61,6 +61,13 @@
       </button>
     </div>
 
+    <!-- Selection bar (multi-select delete) -->
+    <div class="select-bar" id="selectBar">
+      <button class="select-btn" id="selectCancel" aria-label="إلغاء"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+      <span class="select-count" id="selectCount"></span>
+      <button class="select-btn danger" id="selectDelete" aria-label="حذف"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 7H19M10 11V16M14 11V16M6 7L7 19A2 2 0 0 0 9 21H15A2 2 0 0 0 17 19L18 7M9 7V4A1 1 0 0 1 10 3H14A1 1 0 0 1 15 4V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+    </div>
+
     <!-- Install banner -->
     <div class="notif-banner" id="installBanner" style="display:none;">
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
@@ -75,7 +82,7 @@
     <div class="sheet-backdrop" id="notifSheetBackdrop" style="display:none;">
       <div class="sheet">
         <div class="sheet-handle"></div>
-        <h4>الإشعارات</h4>
+        <h4>الإعدادات</h4>
         <div class="notif-status" id="notifStatus"></div>
         <button class="notif-enable-btn" id="notifEnableBtn" style="display:none;">تفعيل الإشعارات</button>
         <h4 class="notif-sub">كتم الإشعارات</h4>
@@ -87,6 +94,11 @@
         <button class="notif-toggle" id="muteReactToggle" style="margin-top:8px;"><span class="opt-txt"><b>كتم إشعارات التفاعلات</b><small>لا يصلك إشعار عندما يتفاعل أحد على رسالتك</small></span><span class="switch"></span></button>
         <h4 class="notif-sub">الصوت</h4>
         <button class="notif-toggle on" id="chatTonesToggle"><span class="opt-txt"><b>نغمة المحادثات</b><small>أصوات الإرسال والاستلام والتفاعلات داخل الموقع</small></span><span class="switch"></span></button>
+        <h4 class="notif-sub">التفاعل السريع</h4>
+        <div class="quick-hint">انقر مرتين على أي رسالة للتفاعل بهذا الإيموجي</div>
+        <div class="quick-grid" id="quickGrid"></div>
+        <h4 class="notif-sub">المحادثة</h4>
+        <button class="notif-toggle" id="clearHistoryBtn"><span class="opt-txt"><b>مسح سجل المحادثة</b><small>يُحذف من جهازك فقط ولا يتأثر الآخرون</small></span></button>
         <button class="notif-enable-btn" id="installSheetBtn" style="display:none; margin-top:14px;">تثبيت التطبيق</button>
       </div>
     </div>
@@ -110,6 +122,10 @@
         <p>ابدأ أول محادثة</p>
       </div>
       <div id="messagesList"></div>
+      <div class="typing-row" id="typingRow">
+        <span id="typingNames"></span>
+        <span class="typing-dots"><span></span><span></span><span></span></span>
+      </div>
     </main>
 
     <button class="jump-bottom-btn" id="jumpBottomBtn">
@@ -118,10 +134,6 @@
     </button>
 
     <div class="bottom-dock" id="bottomDock">
-    <div class="typing-row" id="typingRow">
-      <span id="typingNames"></span>
-      <span class="typing-dots"><span></span><span></span><span></span></span>
-    </div>
 
     <!-- Reply preview -->
     <div class="reply-preview" id="replyPreview" style="display:none;">

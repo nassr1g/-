@@ -30,6 +30,10 @@
   const LS_SENDSND_KEY = 'otaku_send_sound_v1';
   const LS_INSTALL_KEY = 'otaku_install_dismissed_v1';
   const LS_MUTEREACT_KEY = 'otaku_mute_react_v1';
+  const LS_QUICK_KEY = 'otaku_quick_react_v1';
+  const LS_DBLHINT_KEY = 'otaku_dbl_hint_v1';
+  const LS_CLEAR_KEY = 'otaku_clear_before_v1';
+  const LS_HIDDEN_KEY = 'otaku_hidden_keys_v1';
 
   // Firebase Console > Project settings > Cloud Messaging > Web Push certificates
   // > Generate key pair  -> paste the PUBLIC key here.
@@ -86,6 +90,12 @@
   const notifBannerClose = $('notifBannerClose');
   const chatTonesToggle = $('chatTonesToggle');
   const muteReactToggle = $('muteReactToggle');
+  const quickGrid = $('quickGrid');
+  const clearHistoryBtn = $('clearHistoryBtn');
+  const selectBar = $('selectBar');
+  const selectCount = $('selectCount');
+  const selectCancel = $('selectCancel');
+  const selectDelete = $('selectDelete');
   const bottomDock = $('bottomDock');
   const installBanner = $('installBanner');
   const installBtn = $('installBtn');
@@ -347,7 +357,9 @@
       } else {
         const label = names.length === 1 ? `${names[0]} يكتب` : `${names.slice(0,2).join('، ')} يكتبون`;
         typingNames.textContent = label;
+        const wasNear = isNearBottom();
         typingRow.classList.add('show');
+        if (wasNear) scrollToBottom();
       }
     });
   }
@@ -422,9 +434,11 @@
     liveQuery.on('child_added', (snap) => {
       const key = snap.key;
       if (allMessagesByKey.has(key)) return;
+      loadedCount++;
       const data = snap.val();
       renderMessage(key, data, liveSyncStarted /* animate only once we're past the initial batch */);
       if (oldestLoadedKey === null) oldestLoadedKey = key;
+      if (!allMessagesByKey.has(key)) return; // hidden on this device
       // Always force-scroll for the initial batch and for my own just-sent
       // messages; for incoming messages from others, only auto-scroll if
       // the user is already near the bottom (otherwise show the jump button).
@@ -443,7 +457,7 @@
     // synchronous/microtask child_added events has flushed.
     messagesRef.limitToLast(PAGE_SIZE).once('value', () => {
       liveSyncStarted = true;
-      hasMoreHistory = allMessagesByKey.size >= PAGE_SIZE;
+      hasMoreHistory = loadedCount >= PAGE_SIZE;
       loadMoreRow.style.display = hasMoreHistory ? 'flex' : 'none';
       scrollToBottom();
     });
@@ -575,6 +589,7 @@
 
   function renderMessage(key, data, isNew, prepend) {
     if (!data) return;
+    if (isHiddenLocal(key, data)) return; // cleared / deleted on this device only
     const mine = data.senderUid === myUid;
     const isDeleted = !!data.deleted;
 
@@ -922,7 +937,7 @@
       dx = 0; dy = 0;
       dragging = false; decided = false; longPressFired = false;
 
-      longPressTimer = setTimeout(() => {
+      if (!selectMode) longPressTimer = setTimeout(() => {
         longPressFired = true;
         if (navigator.vibrate) navigator.vibrate(12);
         openContextMenu(row, key, data, mine, { x: e.clientX, y: e.clientY });
@@ -935,6 +950,7 @@
 
     function onPointerMove(e) {
       if (pointerId !== e.pointerId) return;
+      if (selectMode) return;
       dx = e.clientX - startX; dy = e.clientY - startY;
 
       if (!decided) {
@@ -971,7 +987,7 @@
       swipeIcon.classList.toggle('ready', progress >= 1);
     }
 
-    function onPointerUp() {
+    function onPointerUp(e) {
       clearTimeout(longPressTimer);
       const triggeredReply = dragging && Math.abs(dx) >= SWIPE_TRIGGER_PX;
 
@@ -984,6 +1000,8 @@
       if (triggeredReply) {
         if (navigator.vibrate) navigator.vibrate(18);
         startReply(key, data);
+      } else if (!dragging && !longPressFired && e && e.type === 'pointerup' && Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+        handleTap(e, key);
       }
       cleanup();
     }
@@ -998,6 +1016,7 @@
     row.addEventListener('pointerdown', onPointerDown);
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (selectMode) return;
       openContextMenu(row, key, data, mine, { x: e.clientX, y: e.clientY });
     });
   }
@@ -1061,6 +1080,7 @@
       closeContextMenu();
     });
     list.appendChild(replyItem);
+    list.appendChild(makeCtxItem(checkGlyphMenu(), 'تحديد', () => { enterSelect(key); closeContextMenu(); }));
 
     if (mine && !data.deleted) {
       const editItem = makeCtxItem(editGlyphMenu(), 'تعديل الرسالة', () => {
@@ -1195,6 +1215,7 @@
     messageInput.focus();
     const len = messageInput.value.length;
     messageInput.setSelectionRange(len, len);
+    revealMessage(key);
   }
   function cancelEdit() {
     editingKey = null;
@@ -1660,7 +1681,15 @@
     const vv = window.visualViewport;
     const appEl = document.querySelector('.app');
     if (!vv || !appEl) return;
+    const coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    let baseH = Math.max(window.innerHeight, vv.height);
+    let wasOpen = false;
     const sync = () => {
+      if (vv.height > baseH) baseH = vv.height;
+      const open = vv.height < baseH - 120;
+      // keyboard dismissed with the system button: let the capsule go back to its resting shape
+      if (coarse && wasOpen && !open && document.activeElement === messageInput && !emojiPanelOpen) messageInput.blur();
+      wasOpen = open;
       if (window.innerHeight - vv.height > 80) {
         document.documentElement.style.setProperty('--app-h', vv.height + 'px');
         appEl.style.transform = vv.offsetTop ? 'translateY(' + vv.offsetTop + 'px)' : '';
@@ -1671,8 +1700,223 @@
     };
     vv.addEventListener('resize', sync);
     vv.addEventListener('scroll', sync);
+    window.addEventListener('orientationchange', () => setTimeout(() => { baseH = vv.height; sync(); }, 450));
     sync();
   })();
+
+  // ---------- Quick reaction (double tap) ----------
+  const QUICK_CHOICES = ['❤️', '😂', '😮', '😢', '🙏', '👍', '🔥', '🎉', '😍', '🥰', '👏', '💯'];
+  let quickEmoji = '❤️';
+  let lastTap = { key: null, t: 0 };
+
+  function renderQuickGrid() {
+    quickGrid.innerHTML = '';
+    QUICK_CHOICES.forEach((em) => {
+      const b = document.createElement('button');
+      b.className = 'quick-opt' + (em === quickEmoji ? ' active' : '');
+      b.textContent = em;
+      b.addEventListener('click', () => {
+        quickEmoji = em;
+        try { localStorage.setItem(LS_QUICK_KEY, em); } catch (e) {}
+        renderQuickGrid();
+      });
+      quickGrid.appendChild(b);
+    });
+  }
+
+  function handleTap(e, key) {
+    if (selectMode) { toggleSelect(key); return; }
+    if (!e.target.closest('.msg-bubble') || e.target.closest('.reply-quote, .reaction-chip')) { lastTap = { key: null, t: 0 }; return; }
+    const now = Date.now();
+    if (lastTap.key === key && now - lastTap.t < 320) {
+      lastTap = { key: null, t: 0 };
+      toggleMyReaction(key, quickEmoji);
+      if (navigator.vibrate) navigator.vibrate(14);
+      let seen = false;
+      try { seen = localStorage.getItem(LS_DBLHINT_KEY) === '1'; localStorage.setItem(LS_DBLHINT_KEY, '1'); } catch (er) {}
+      if (!seen) showToast('تفاعلت بـ ' + quickEmoji + ' بنقرتين. تقدر تغيّر الإيموجي من الإعدادات.', 'تغيير', () => {
+        updateNotifUI();
+        notifSheetBackdrop.style.display = 'flex';
+        setTimeout(() => quickGrid.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120);
+      });
+    } else {
+      lastTap = { key, t: now };
+    }
+  }
+
+  function showToast(text, actionLabel, onAction) {
+    const old = document.querySelector('.app-toast');
+    if (old) old.remove();
+    const t = document.createElement('div');
+    t.className = 'app-toast';
+    const span = document.createElement('span');
+    span.textContent = text;
+    t.appendChild(span);
+    if (actionLabel) {
+      const b = document.createElement('button');
+      b.textContent = actionLabel;
+      b.addEventListener('click', () => { t.remove(); if (onAction) onAction(); });
+      t.appendChild(b);
+    }
+    document.querySelector('.app').appendChild(t);
+    requestAnimationFrame(() => t.classList.add('show'));
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 7000);
+  }
+
+  // ---------- Local-only deletion: hide chosen messages / clear the whole history on this device ----------
+  let hiddenKeys = new Set();
+  let clearedBefore = 0;
+  let loadedCount = 0;
+
+  function loadLocalPrefs() {
+    try {
+      const q = localStorage.getItem(LS_QUICK_KEY);
+      if (q) quickEmoji = q;
+      clearedBefore = Number(localStorage.getItem(LS_CLEAR_KEY)) || 0;
+      hiddenKeys = new Set(JSON.parse(localStorage.getItem(LS_HIDDEN_KEY) || '[]'));
+    } catch (e) {}
+    renderQuickGrid();
+  }
+  function isHiddenLocal(key, data) {
+    return hiddenKeys.has(key) || (clearedBefore > 0 && (data.timestamp || 0) <= clearedBefore);
+  }
+  function persistHidden() {
+    try { localStorage.setItem(LS_HIDDEN_KEY, JSON.stringify([...hiddenKeys].slice(-3000))); } catch (e) {}
+  }
+
+  function vanishRow(row) {
+    row.style.maxHeight = row.offsetHeight + 'px';
+    row.style.overflow = 'hidden';
+    void row.offsetHeight;
+    row.style.transition = 'max-height .38s cubic-bezier(.4,0,.2,1), opacity .3s ease, margin .38s ease, transform .38s ease';
+    row.style.maxHeight = '0px';
+    row.style.opacity = '0';
+    row.style.margin = '0 4px';
+    row.style.transform = 'scale(.94)';
+    setTimeout(() => row.remove(), 420);
+  }
+
+  function dropMessageLocally(key) {
+    const entry = allMessagesByKey.get(key);
+    if (!entry) return;
+    db.ref('chat/messages/' + key + '/react').off('value');
+    vanishRow(entry.el);
+    allMessagesByKey.delete(key);
+  }
+
+  function hideLocally(keys) {
+    keys.forEach((k) => { hiddenKeys.add(k); dropMessageLocally(k); });
+    persistHidden();
+  }
+
+  function clearHistoryLocal() {
+    let maxTs = clearedBefore;
+    allMessagesByKey.forEach((e) => { if ((e.data.timestamp || 0) > maxTs) maxTs = e.data.timestamp; });
+    clearedBefore = maxTs;
+    try { localStorage.setItem(LS_CLEAR_KEY, String(clearedBefore)); } catch (e) {}
+    [...allMessagesByKey.keys()].forEach((k) => dropMessageLocally(k));
+    hasMoreHistory = false;
+    loadMoreRow.style.display = 'none';
+    unseenNewCount = 0;
+    updateJumpBtn();
+    setTimeout(() => { if (!allMessagesByKey.size) welcomeCard.style.display = ''; }, 450);
+  }
+
+  function openActionSheet(title, desc, actions) {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'sheet-backdrop';
+    const sheet = document.createElement('div');
+    sheet.className = 'sheet';
+    const handle = document.createElement('div'); handle.className = 'sheet-handle';
+    const h4 = document.createElement('h4'); h4.textContent = title;
+    sheet.appendChild(handle); sheet.appendChild(h4);
+    if (desc) { const p = document.createElement('div'); p.className = 'quick-hint'; p.textContent = desc; sheet.appendChild(p); }
+    const close = () => backdrop.remove();
+    actions.concat([{ label: 'إلغاء', cancel: true }]).forEach((a) => {
+      const b = document.createElement('button');
+      b.className = 'sheet-btn' + (a.danger ? ' danger' : '') + (a.cancel ? ' cancel' : '');
+      const bl = document.createElement('b'); bl.textContent = a.label; b.appendChild(bl);
+      if (a.desc) { const sm = document.createElement('small'); sm.textContent = a.desc; b.appendChild(sm); }
+      b.addEventListener('click', () => { close(); if (a.onClick) a.onClick(); });
+      sheet.appendChild(b);
+    });
+    backdrop.appendChild(sheet);
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+    document.body.appendChild(backdrop);
+  }
+
+  clearHistoryBtn.addEventListener('click', () => {
+    notifSheetBackdrop.style.display = 'none';
+    openActionSheet('مسح سجل المحادثة؟', 'ستُحذف كل الرسائل من جهازك فقط. لن يتأثر الآخرون، وتصلك الرسائل الجديدة كالمعتاد.', [
+      { label: 'مسح السجل', danger: true, onClick: clearHistoryLocal }
+    ]);
+  });
+
+  // ---------- Multi-select ----------
+  let selectMode = false;
+  const selected = new Set();
+
+  function enterSelect(key) {
+    selectMode = true;
+    document.body.classList.add('selecting');
+    selectBar.classList.add('show');
+    selected.clear();
+    toggleSelect(key);
+  }
+  function exitSelect() {
+    selectMode = false;
+    document.body.classList.remove('selecting');
+    selectBar.classList.remove('show');
+    selected.forEach((k) => { const e = allMessagesByKey.get(k); if (e) e.el.classList.remove('selected'); });
+    selected.clear();
+  }
+  function toggleSelect(key) {
+    const e = allMessagesByKey.get(key);
+    if (!e) return;
+    if (selected.has(key)) { selected.delete(key); e.el.classList.remove('selected'); }
+    else { selected.add(key); e.el.classList.add('selected'); }
+    selectCount.textContent = selected.size ? 'تم تحديد ' + selected.size : '';
+    if (!selected.size) exitSelect();
+  }
+  selectCancel.addEventListener('click', exitSelect);
+  selectDelete.addEventListener('click', () => {
+    const keys = [...selected];
+    if (!keys.length) return;
+    const allMine = keys.every((k) => { const e = allMessagesByKey.get(k); return e && e.data.senderUid === myUid && !e.data.deleted; });
+    const actions = [{
+      label: 'حذف عندي فقط', desc: 'تُحذف من جهازك ولا تتأثر المحادثة عند الآخرين',
+      onClick: () => { hideLocally(keys); exitSelect(); }
+    }];
+    if (allMine) actions.push({
+      label: 'حذف للجميع', desc: 'تظهر "تم حذف هذه الرسالة" عند الجميع', danger: true,
+      onClick: () => { keys.forEach(deleteOwnMessage); exitSelect(); }
+    });
+    openActionSheet('حذف ' + keys.length + (keys.length === 1 ? ' رسالة' : ' رسائل'), '', actions);
+  });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && selectMode) exitSelect(); });
+
+  function checkGlyphMenu() {
+    const w = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    w.setAttribute('viewBox', '0 0 24 24'); w.setAttribute('width', '18'); w.setAttribute('height', '18');
+    w.innerHTML = '<circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M8.3 12.2l2.5 2.5 4.9-5.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>';
+    return w;
+  }
+
+  // Bring a message into the visible area (above the keyboard) - used when editing mid-chat
+  function revealMessage(key) {
+    const run = () => {
+      const entry = allMessagesByKey.get(key);
+      if (!entry || !entry.el.isConnected) return;
+      const wrap = messagesWrap.getBoundingClientRect();
+      const top = wrap.top + 8;
+      const bottom = bottomDock.getBoundingClientRect().top - 8;
+      const el = entry.el.getBoundingClientRect();
+      if (el.top >= top && el.bottom <= bottom) return;
+      const target = top + Math.max(0, (bottom - top - el.height) / 2);
+      messagesWrap.scrollBy({ top: el.top - target, behavior: 'smooth' });
+    };
+    setTimeout(run, 120); setTimeout(run, 450); setTimeout(run, 850);
+  }
 
   // ---------- Presence: show as offline the moment the user leaves ----------
   function announcePresence() {
@@ -1865,6 +2109,7 @@
   function init() {
     loadIdentity();
     loadMuteMode();
+    loadLocalPrefs();
     brandIntroText.textContent = CONNECT_TEXT;
     brandIntroText.classList.add('connecting', 'anim-in');
     initFirebase();
