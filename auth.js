@@ -168,8 +168,8 @@
       if (t.dataset.tab) show(t.dataset.tab);
       else if (t.dataset.paneGo) show(t.dataset.paneGo);
       else if (t.dataset.eye) { const i = $(t.dataset.eye), s = i.type === 'password'; i.type = s ? 'text' : 'password'; t.textContent = s ? 'إخفاء' : 'إظهار'; }
-      else if (t.dataset.google) run(t, googleLogin);
-      else if (t.dataset.logout) logout();
+      else if (t.hasAttribute('data-google')) run(t, googleLogin);
+      else if (t.hasAttribute('data-logout')) logout();
     });
     overlay.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
@@ -186,6 +186,8 @@
       if (pw.length < 8) throw { code: 'auth/weak-password' };
       const c = await auth.createUserWithEmailAndPassword(em, pw);
       await c.user.sendEmailVerification();
+      resendAt = Date.now() + 45000;
+      say(M(), 'تم إرسال رسالة التحقق إلى ' + em + '. قد تستغرق دقائق، وتفقد مجلد الرسائل غير المرغوبة (Spam).', 'ok');
     });
     $('fgBtn').onclick = () => run($('fgBtn'), async () => {
       const em = $('fgEmail').value.trim(); if (!em) throw { message: 'أدخل بريدك الإلكتروني' };
