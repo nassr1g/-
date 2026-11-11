@@ -40,7 +40,6 @@
         <span class="brand-intro-text" id="brandIntroText">Hi!</span>
       </div>
       <div class="header-meta">
-        <span class="conn-text show" id="connText">جارِ الاتصال بالمحادثة...</span>
         <button class="pill pill-btn bell-btn" id="notifBtn" aria-label="الإشعارات">
           <svg viewBox="0 0 24 24" width="17" height="17"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path class="slash" d="M4 4l16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
           <span class="notif-dot" id="notifDot" style="display:none;"></span>
@@ -85,6 +84,7 @@
           <button class="notif-opt" data-mode="normal"><span class="radio"></span><span class="opt-txt"><b>كتم الرسائل العادية</b><small>يصلك فقط ما فيه رد عليك</small></span></button>
           <button class="notif-opt" data-mode="all"><span class="radio"></span><span class="opt-txt"><b>كتم الكل</b><small>لا يصلك أي إشعار أو صوت</small></span></button>
         </div>
+        <button class="notif-toggle" id="muteReactToggle" style="margin-top:8px;"><span class="opt-txt"><b>كتم إشعارات التفاعلات</b><small>لا يصلك إشعار عندما يتفاعل أحد على رسالتك</small></span><span class="switch"></span></button>
         <h4 class="notif-sub">الصوت</h4>
         <button class="notif-toggle on" id="chatTonesToggle"><span class="opt-txt"><b>نغمة المحادثات</b><small>أصوات الإرسال والاستلام والتفاعلات داخل الموقع</small></span><span class="switch"></span></button>
         <button class="notif-enable-btn" id="installSheetBtn" style="display:none; margin-top:14px;">تثبيت التطبيق</button>
@@ -117,6 +117,7 @@
       <span class="jump-bottom-badge" id="jumpBottomBadge" style="display:none;">1</span>
     </button>
 
+    <div class="bottom-dock" id="bottomDock">
     <div class="typing-row" id="typingRow">
       <span id="typingNames"></span>
       <span class="typing-dots"><span></span><span></span><span></span></span>
@@ -151,6 +152,7 @@
         <svg viewBox="0 0 24 24" width="19" height="19"><path d="M4 12L20 4L13 20L11 13L4 12Z" fill="currentColor"/></svg>
       </button>
       </div>
+    </div>
     </div>
   </div>
 

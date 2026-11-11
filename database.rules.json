@@ -138,6 +138,9 @@
           "ts": {
             ".validate": true
           },
+          "muteReact": {
+            ".validate": "newData.isBoolean()"
+          },
           "$other": {
             ".validate": false
           }

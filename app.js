@@ -29,6 +29,7 @@
   const LS_BANNER_KEY = 'otaku_notif_banner_closed_v1';
   const LS_SENDSND_KEY = 'otaku_send_sound_v1';
   const LS_INSTALL_KEY = 'otaku_install_dismissed_v1';
+  const LS_MUTEREACT_KEY = 'otaku_mute_react_v1';
 
   // Firebase Console > Project settings > Cloud Messaging > Web Push certificates
   // > Generate key pair  -> paste the PUBLIC key here.
@@ -72,7 +73,6 @@
   const emojiGrid = $('emojiGrid');
   const typingRow = $('typingRow');
   const typingNames = $('typingNames');
-  const connText = $('connText');
 
   const notifBtn = $('notifBtn');
   const notifDot = $('notifDot');
@@ -85,6 +85,8 @@
   const notifBannerBtn = $('notifBannerBtn');
   const notifBannerClose = $('notifBannerClose');
   const chatTonesToggle = $('chatTonesToggle');
+  const muteReactToggle = $('muteReactToggle');
+  const bottomDock = $('bottomDock');
   const installBanner = $('installBanner');
   const installBtn = $('installBtn');
   const installClose = $('installClose');
@@ -193,6 +195,8 @@
         } else {
           brandIntroText.textContent = SITE_NAME;
           brandIntroText.classList.add('final', 'anim-in');
+          introDone = true;
+          brandMode = 'final';
         }
       }, 700);
     }
@@ -227,18 +231,55 @@
   // ========================================================
   // Connection + presence
   // ========================================================
-  let connTimer = null;
+  // Header sequence: "connecting..." -> (once stably connected) Hi! -> Nice to see you -> site name.
+  // If the connection drops later, "connecting..." takes the site name's place until it returns.
+  const CONNECT_TEXT = 'جارِ الاتصال بالمحادثة...';
+  let introStarted = false, introDone = false, brandMode = 'connecting';
+  let connTimer = null, lostTimer = null;
+
+  function swapBrand(text, mode) {
+    if (brandMode === mode) return;
+    brandMode = mode;
+    brandIntroText.classList.remove('anim-in');
+    brandIntroText.classList.add('anim-out');
+    setTimeout(() => {
+      if (brandMode !== mode) return;
+      brandIntroText.classList.remove('anim-out', 'final', 'connecting');
+      brandIntroText.textContent = text;
+      brandIntroText.classList.add(mode === 'final' ? 'final' : 'connecting');
+      void brandIntroText.offsetWidth;
+      brandIntroText.classList.add('anim-in');
+    }, 500);
+  }
+  function onStableConnection() {
+    if (!introStarted) {
+      introStarted = true;
+      brandMode = 'intro';
+      brandIntroText.classList.remove('anim-in');
+      brandIntroText.classList.add('anim-out');
+      setTimeout(() => {
+        brandIntroText.classList.remove('anim-out', 'connecting');
+        playBrandIntro();
+      }, 500);
+    } else if (introDone) {
+      swapBrand(SITE_NAME, 'final');
+    }
+  }
+  function onConnectionLost() {
+    if (introDone) swapBrand(CONNECT_TEXT, 'connecting');
+  }
+
   function updateConnectionUI() {
     clearTimeout(connTimer);
+    clearTimeout(lostTimer);
     if (isConnected && firebaseReady) {
       statusDot.classList.remove('off');
       sendBtn.disabled = false;
-      // hide the "connecting" label only once the connection has held steady
-      connTimer = setTimeout(() => connText.classList.remove('show'), 700);
+      connTimer = setTimeout(onStableConnection, 700); // only once the connection has held steady
     } else {
       statusDot.classList.add('off');
       sendBtn.disabled = true;
-      connText.classList.add('show');
+      lostTimer = setTimeout(onConnectionLost, 1500);  // ignore tiny blips
     }
   }
 
@@ -247,16 +288,7 @@
     connectedRef.on('value', (snap) => {
       isConnected = !!snap.val();
       updateConnectionUI();
-      if (isConnected) {
-        const myUserRef = usersRef.child(myUid);
-        myUserRef.set({
-          name: myName,
-          lastSeen: firebase.database.ServerValue.TIMESTAMP,
-          online: true
-        });
-        myUserRef.onDisconnect().remove();
-        typingRef.child(myUid).onDisconnect().remove();
-      }
+      if (isConnected && document.visibilityState === 'visible') announcePresence();
     });
 
     usersRef.on('value', (snap) => {
@@ -368,7 +400,6 @@
       });
     }
 
-    playBrandIntro();
   }
 
   // ========================================================
@@ -514,6 +545,14 @@
   if (window.ResizeObserver) {
     new ResizeObserver(() => { if (pinnedToBottom) messagesWrap.scrollTop = messagesWrap.scrollHeight; }).observe(messagesWrap);
   }
+  // The composer area floats over the chat (messages scroll beneath the glass);
+  // keep the chat's bottom padding equal to its height.
+  const syncDock = () => {
+    document.documentElement.style.setProperty('--dock-h', bottomDock.offsetHeight + 'px');
+    if (pinnedToBottom) messagesWrap.scrollTop = messagesWrap.scrollHeight;
+  };
+  if (window.ResizeObserver) new ResizeObserver(syncDock).observe(bottomDock);
+  syncDock();
   messagesWrap.addEventListener('scroll', () => {
     if (isNearBottom()) {
       jumpBottomBtn.classList.remove('show');
@@ -629,19 +668,119 @@
     }
   }
 
-  // Smoothly swaps a bubble's content: old content fades, the bubble morphs
-  // (height + width) to its new size, new content fades in.
-  function swapBubble(bubble, mutate, done) {
-    // one morph at a time per bubble; later changes wait their turn
-    if (bubble._swapping) { bubble._queued = () => swapBubble(bubble, mutate, done); return; }
+  // ---------- Ash / dust text effect (Telegram-style) ----------
+  // Words fade+blur out in sequence while dust particles drift away; the reverse
+  // (particles converging, words fading in) assembles the new text.
+  function wordify(el, extraClass) {
+    const text = el.textContent;
+    el.textContent = '';
+    const words = [];
+    text.split(/(\s+)/).forEach((part) => {
+      if (!part) return;
+      if (/^\s+$/.test(part)) { el.appendChild(document.createTextNode(part)); return; }
+      const s = document.createElement('span');
+      s.className = 'dw' + (extraClass ? ' ' + extraClass : '');
+      s.textContent = part;
+      el.appendChild(s);
+      words.push(s);
+    });
+    return words;
+  }
+
+  function wordDelays(n) {
+    const max = Math.min(260, n * 16);
+    const list = [];
+    for (let i = 0; i < n; i++) list.push((n > 1 ? (i / (n - 1)) * max * 0.7 : 0) + Math.random() * max * 0.3);
+    return { max, list };
+  }
+
+  function runDust(row, words, reverse, delays, color) {
+    const rowRect = row.getBoundingClientRect();
+    const M = 56;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = Math.ceil(rowRect.width + M * 2), H = Math.ceil(rowRect.height + M * 2);
+    const cv = document.createElement('canvas');
+    cv.className = 'dust-canvas';
+    cv.width = W * dpr; cv.height = H * dpr;
+    cv.style.cssText = 'position:absolute;pointer-events:none;z-index:7;left:' + (-M) + 'px;top:' + (-M) + 'px;width:' + W + 'px;height:' + H + 'px;';
+    row.appendChild(cv);
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = color;
+
+    const rects = words.map((w) => w.getBoundingClientRect());
+    let total = 0;
+    const counts = rects.map((r) => { const c = Math.max(3, Math.round(r.width * r.height / 50)); total += c; return c; });
+    const k = total > 420 ? 420 / total : 1;
+    const parts = [];
+    rects.forEach((r, i) => {
+      const c = Math.max(2, Math.round(counts[i] * k));
+      for (let j = 0; j < c; j++) {
+        parts.push({
+          x: r.left - rowRect.left + M + Math.random() * r.width,
+          y: r.top - rowRect.top + M + Math.random() * r.height,
+          dx: 8 + Math.random() * 46, dy: -(6 + Math.random() * 38),
+          s: 1 + Math.random() * 1.6, d: delays[i]
+        });
+      }
+    });
+    const L = reverse ? 560 : 680;
+    const dur = Math.max.apply(null, delays.concat([0])) + L;
+    const t0 = performance.now();
+    (function frame(now) {
+      if (!cv.isConnected) return;
+      const el = Math.max(0, now - t0);
+      ctx.clearRect(0, 0, W, H);
+      for (let i = 0; i < parts.length; i++) {
+        const p = parts[i];
+        const t = (el - p.d) / L;
+        if (t <= 0 || t >= 1) continue;
+        let a, e;
+        if (!reverse) { e = 1 - (1 - t) * (1 - t); a = 1 - t * t; }
+        else { const u = 1 - t; e = 1 - (1 - u) * (1 - u); a = t < 0.8 ? Math.pow(t / 0.8, 0.7) : (1 - t) / 0.2; }
+        ctx.globalAlpha = Math.max(0, a) * 0.9;
+        ctx.fillRect(p.x + p.dx * e, p.y + p.dy * e, p.s, p.s);
+      }
+      if (el < dur) requestAnimationFrame(frame); else cv.remove();
+    })(t0);
+  }
+
+  function dissolveText(el, row) {
+    const words = wordify(el);
+    if (!words.length) return 0;
+    const d = wordDelays(words.length);
+    words.forEach((w, i) => { w.style.animationDelay = d.list[i] + 'ms'; w.classList.add('dw-out'); });
+    runDust(row, words, false, d.list, getComputedStyle(el).color);
+    return d.max + 340;
+  }
+
+  function assembleText(el, words, row) {
+    const d = wordDelays(words.length);
+    words.forEach((w, i) => { w.style.animationDelay = d.list[i] + 'ms'; w.classList.remove('dw-hidden'); w.classList.add('dw-in'); });
+    runDust(row, words, true, d.list, getComputedStyle(el).color);
+    return d.max + 600;
+  }
+
+  // Swaps a bubble's content in three calm steps:
+  // 1) old text turns to ash  2) bubble morphs to its new size  3) new text assembles.
+  function swapBubble(bubble, mutate, done, opts) {
+    opts = opts || {};
+    if (bubble._swapping) { bubble._queued = () => swapBubble(bubble, mutate, done, opts); return; }
     bubble._swapping = true;
-    bubble.classList.add('swap-out');
+    const row = bubble.closest('.msg-row');
+    const oldText = bubble.querySelector('.msg-text');
+    let t1 = 0;
+    if (oldText && row && oldText.textContent.trim()) t1 = dissolveText(oldText, row);
+    if (opts.fadeOthers) bubble.classList.add('fade-others');
+
     setTimeout(() => {
       const h0 = bubble.offsetHeight, w0 = bubble.offsetWidth;
       mutate();
-      bubble.classList.remove('swap-out');
+      bubble.classList.remove('fade-others');
+      if (opts.fadeOthers) bubble.classList.add('swap-in');
+      const fresh = bubble.querySelector('.msg-text');
+      const words = fresh ? wordify(fresh, 'dw-hidden') : [];
       const h1 = bubble.offsetHeight, w1 = bubble.offsetWidth;
-      bubble.classList.add('swap-in');
       bubble.style.overflow = 'hidden';
       bubble.style.height = h0 + 'px';
       bubble.style.width = w0 + 'px';
@@ -649,14 +788,19 @@
       bubble.style.transition = 'height .32s cubic-bezier(.2,.8,.3,1), width .32s cubic-bezier(.2,.8,.3,1), opacity .3s ease';
       bubble.style.height = h1 + 'px';
       bubble.style.width = w1 + 'px';
+
       setTimeout(() => {
-        bubble.classList.remove('swap-in');
         bubble.style.height = bubble.style.width = bubble.style.overflow = bubble.style.transition = '';
-        bubble._swapping = false;
-        if (done) done();
-        if (bubble._queued) { const q = bubble._queued; bubble._queued = null; q(); }
-      }, 360);
-    }, 190);
+        const t2 = (fresh && row && words.length) ? assembleText(fresh, words, row) : 0;
+        setTimeout(() => {
+          if (fresh && fresh.isConnected) fresh.textContent = fresh.textContent; // back to plain text
+          bubble.classList.remove('swap-in');
+          bubble._swapping = false;
+          if (done) done();
+          if (bubble._queued) { const q = bubble._queued; bubble._queued = null; q(); }
+        }, t2 + 30);
+      }, 340);
+    }, t1);
   }
 
   function updateExistingMessage(key, data) {
@@ -695,8 +839,9 @@
         const cur = allMessagesByKey.get(key);
         const freshRow = row.cloneNode(true);
         row.replaceWith(freshRow);
+        freshRow.querySelectorAll('.dust-canvas').forEach((c) => c.remove());
         allMessagesByKey.set(key, { data: cur ? cur.data : data, el: freshRow });
-      });
+      }, { fadeOthers: true });
       return;
     }
 
@@ -1020,6 +1165,7 @@
   // Reply flow
   // ========================================================
   function startReply(key, data) {
+    data = (allMessagesByKey.get(key) || {}).data || data;
     cancelEdit();
     activeReply = { key, sender: data.senderName || 'مجهول', text: data.text || '' };
     replyPreview.classList.remove('edit-mode');
@@ -1036,6 +1182,7 @@
   // in a distinct "edit mode" so there's no separate UI to build.
   // ========================================================
   function startEdit(key, data) {
+    data = (allMessagesByKey.get(key) || {}).data || data;
     cancelReply();
     editingKey = key;
     messageInput.value = data.text || '';
@@ -1057,7 +1204,8 @@
   // ========================================================
   // Sending / editing messages
   // ========================================================
-  function sendMessage() {
+  function sendMessage(focusAtPress) {
+    const keepFocus = (typeof focusAtPress === 'boolean') ? focusAtPress : document.activeElement === messageInput;
     const text = sanitizeMessage(messageInput.value).trim();
     if (!text) return;
     if (!firebaseReady || !isConnected) {
@@ -1073,7 +1221,7 @@
     typingRef.child(myUid).remove();
     messageInput.value = '';
     autoGrow();
-    messageInput.focus({ preventScroll: true });
+    if (keepFocus) messageInput.focus({ preventScroll: true });
 
     if (editingKey) {
       const key = editingKey;
@@ -1120,8 +1268,15 @@
     });
   }
   // Tapping the send button must not steal focus from the text box (keeps the keyboard open)
+  // The send button never opens or closes the keyboard: it keeps focus where it was.
+  let focusAtPress = null;
+  sendBtn.addEventListener('pointerdown', () => { focusAtPress = document.activeElement === messageInput; });
   ['pointerdown', 'mousedown'].forEach((ev) => sendBtn.addEventListener(ev, (e) => e.preventDefault()));
-  sendBtn.addEventListener('click', sendMessage);
+  sendBtn.addEventListener('click', () => {
+    const f = focusAtPress;
+    focusAtPress = null;
+    sendMessage(f === null ? undefined : f);
+  });
   messageInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
@@ -1305,6 +1460,7 @@
   let pushToken = null;
   let audioCtx = null;
   let chatTonesOn = true;
+  let muteReactOn = false;
   let notifBannerHidden = false;
   let installBannerHidden = false;
   let deferredInstall = null;
@@ -1327,6 +1483,7 @@
       const v = localStorage.getItem(LS_MUTE_KEY);
       if (v === 'normal' || v === 'all') muteMode = v;
       chatTonesOn = localStorage.getItem(LS_SENDSND_KEY) !== '0';
+      muteReactOn = localStorage.getItem(LS_MUTEREACT_KEY) === '1';
     } catch (e) {}
   }
 
@@ -1356,6 +1513,7 @@
       uid: myUid,
       name: myName,
       mute: muteMode,
+      muteReact: muteReactOn,
       ts: firebase.database.ServerValue.TIMESTAMP
     });
   }
@@ -1472,6 +1630,25 @@
     }
   }
 
+  // ---------- Presence: show as offline the moment the user leaves ----------
+  function announcePresence() {
+    if (!usersRef || !isConnected) return;
+    const ref = usersRef.child(myUid);
+    ref.set({ name: myName, lastSeen: firebase.database.ServerValue.TIMESTAMP, online: true });
+    ref.onDisconnect().remove();
+    typingRef.child(myUid).onDisconnect().remove();
+  }
+  function withdrawPresence() {
+    if (!usersRef) return;
+    usersRef.child(myUid).remove();
+    typingRef.child(myUid).remove();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') withdrawPresence(); else announcePresence();
+  });
+  window.addEventListener('pagehide', withdrawPresence);
+  window.addEventListener('pageshow', () => { if (document.visibilityState === 'visible') announcePresence(); });
+
   // ---------- Reaction effects: sound (reactor + message owner) + burst animation ----------
   const reactSeen = new Map();
   function detectNewReactions(key, reactions, entry) {
@@ -1489,7 +1666,7 @@
       burstReaction(entry, emoji);
       const byMe = uid === myUid;
       const myMessage = entry.data.senderUid === myUid;
-      if (byMe || (myMessage && muteMode === 'none')) playSound('react');
+      if (byMe || (myMessage && muteMode === 'none' && !muteReactOn)) playSound('react');
     });
   }
 
@@ -1579,6 +1756,7 @@
       notifBanner.style.display = 'none';
     }
     chatTonesToggle.classList.toggle('on', chatTonesOn);
+    muteReactToggle.classList.toggle('on', muteReactOn);
     updateInstallUI();
   }
 
@@ -1591,6 +1769,12 @@
     if (btn) setMuteMode(btn.dataset.mode);
   });
   notifEnableBtn.addEventListener('click', enableNotifications);
+  muteReactToggle.addEventListener('click', () => {
+    muteReactOn = !muteReactOn;
+    try { localStorage.setItem(LS_MUTEREACT_KEY, muteReactOn ? '1' : '0'); } catch (e) {}
+    if (pushToken && db) db.ref('chat/push/' + pushToken).update({ muteReact: muteReactOn }).catch(() => {});
+    updateNotifUI();
+  });
   chatTonesToggle.addEventListener('click', () => {
     chatTonesOn = !chatTonesOn;
     try { localStorage.setItem(LS_SENDSND_KEY, chatTonesOn ? '1' : '0'); } catch (e) {}
@@ -1637,6 +1821,8 @@
   function init() {
     loadIdentity();
     loadMuteMode();
+    brandIntroText.textContent = CONNECT_TEXT;
+    brandIntroText.classList.add('connecting', 'anim-in');
     initFirebase();
     buildEmojiPanel();
     updateConnectionUI();
