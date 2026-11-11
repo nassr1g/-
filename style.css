@@ -932,57 +932,6 @@ body {
 @keyframes chipPop { 0% { transform: scale(.3); } 60% { transform: scale(1.35); } 100% { transform: scale(1); } }
 
 /* =========================================================
-   Liquid-glass composer (iOS-style floating pill)
-   ========================================================= */
-.app { -webkit-backdrop-filter: none; backdrop-filter: none; } /* lets the glass see the aurora */
-.composer {
-  display: block;
-  background: transparent;
-  border-top: none;
-  -webkit-backdrop-filter: none; backdrop-filter: none;
-  padding: 6px 12px calc(10px + env(safe-area-inset-bottom));
-}
-.composer-glass {
-  display: flex; align-items: flex-end; gap: 6px;
-  padding: 6px;
-  border-radius: 30px;
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.16) 0%, rgba(255,255,255,.05) 55%, rgba(155,89,182,.14) 100%);
-  -webkit-backdrop-filter: blur(26px) saturate(190%);
-  backdrop-filter: blur(26px) saturate(190%);
-  border: 1px solid rgba(255,255,255,.17);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.3),
-    inset 0 -1px 0 rgba(255,255,255,.05),
-    0 10px 34px rgba(8,2,18,.5);
-  transition: border-color .25s ease, box-shadow .25s ease;
-}
-.composer-glass:focus-within {
-  border-color: rgba(201,166,236,.5);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.34),
-    inset 0 -1px 0 rgba(255,255,255,.06),
-    0 10px 34px rgba(8,2,18,.5),
-    0 0 0 3px rgba(155,89,182,.16);
-}
-.composer-glass .icon-btn { background: transparent; width: 38px; height: 38px; color: var(--text-2); }
-.composer-glass .icon-btn:hover { background: rgba(255,255,255,.09); }
-.composer-glass .icon-btn.active { background: rgba(155,89,182,.55); color: #fff; }
-.composer-glass .composer-input-wrap { align-self: center; }
-.composer-glass .composer-input,
-.composer-glass .composer-input:focus {
-  border: none; background: transparent; box-shadow: none;
-  border-radius: 0; padding: 9px 6px;
-}
-.composer-glass .send-btn {
-  width: 38px; height: 38px;
-  box-shadow: 0 4px 14px rgba(155,89,182,.5), inset 0 1px 0 rgba(255,255,255,.38);
-  transition: transform .22s cubic-bezier(.3,1.5,.5,1), opacity .2s ease, filter .2s ease;
-}
-.send-btn.empty { opacity: .55; transform: scale(.88); filter: saturate(.55); }
-.send-btn.empty:hover { transform: scale(.88); box-shadow: none; }
-
-/* =========================================================
    Delete / edit morph animations
    ========================================================= */
 .msg-bubble { transition: opacity .3s ease; }
@@ -1049,49 +998,150 @@ body {
 .messages-wrap { padding-bottom: calc(var(--dock-h, 84px) + 10px); }
 .jump-bottom-btn { bottom: calc(var(--dock-h, 84px) + 14px); }
 
-/* ===== iOS-style dark liquid glass ===== */
+/* =========================================================
+   LIQUID GLASS COMPOSER
+   Floating capsule: layered glass (blur + dome highlight + bounce light),
+   rim light in the site's palette, touch glow, wider while typing.
+   ========================================================= */
+@property --rim-angle { syntax: '<angle>'; inherits: false; initial-value: 130deg; }
+
+.app { height: 100vh; height: var(--app-h, 100dvh); -webkit-backdrop-filter: none; backdrop-filter: none; }
+@media (min-width: 561px) { .app { height: 92vh; } }
+
+.composer {
+  display: block; position: relative;
+  background: transparent; border-top: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  padding: 6px 28px calc(14px + env(safe-area-inset-bottom));
+  transition: padding .55s cubic-bezier(.22,1,.36,1);
+}
+.composer.expanded { padding: 6px 10px calc(10px + env(safe-area-inset-bottom)); }
+
 .composer-glass {
   position: relative; isolation: isolate;
-  background: rgba(20, 12, 34, .30);
-  -webkit-backdrop-filter: blur(20px) saturate(185%) brightness(1.1);
-  backdrop-filter: blur(20px) saturate(185%) brightness(1.1);
-  border: .5px solid rgba(255,255,255,.18);
-  border-radius: 28px;
+  display: flex; align-items: flex-end; gap: 6px;
+  padding: 6px;
+  border: none; border-radius: 28px;
+  background: linear-gradient(180deg, rgba(46,28,76,.40), rgba(18,9,34,.30));
+  -webkit-backdrop-filter: blur(18px) saturate(200%) brightness(1.12) contrast(1.04);
+  backdrop-filter: blur(18px) saturate(200%) brightness(1.12) contrast(1.04);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.45),
-    inset 0 -1px 0 rgba(255,255,255,.08),
-    inset 1px 0 0 rgba(255,255,255,.10),
-    inset -1px 0 0 rgba(255,255,255,.10),
-    inset 0 0 18px rgba(255,255,255,.05),
-    0 10px 30px rgba(0,0,0,.40),
-    0 1px 3px rgba(0,0,0,.28);
+    inset 0 1.5px 1px rgba(255,255,255,.55),
+    inset 0 -10px 18px -8px rgba(95,241,224,.18),
+    inset 10px 0 16px -10px rgba(239,111,201,.18),
+    inset -10px 0 16px -10px rgba(155,89,182,.26),
+    inset 0 0 0 3px rgba(255,255,255,.03),
+    inset 0 0 14px rgba(255,255,255,.05),
+    0 16px 36px -6px rgba(6,0,18,.55),
+    0 4px 12px rgba(6,0,18,.35),
+    0 0 30px rgba(123,79,201,.16);
+  transition: box-shadow .55s ease, transform .55s cubic-bezier(.22,1,.36,1), background .55s ease;
 }
-.composer-glass::before {
+.composer.expanded .composer-glass {
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, rgba(60,38,98,.44), rgba(22,11,40,.32));
+  box-shadow:
+    inset 0 1.5px 1px rgba(255,255,255,.75),
+    inset 0 -12px 20px -8px rgba(95,241,224,.30),
+    inset 12px 0 18px -10px rgba(239,111,201,.30),
+    inset -12px 0 18px -10px rgba(155,89,182,.40),
+    inset 0 0 0 3px rgba(255,255,255,.045),
+    inset 0 0 18px rgba(255,255,255,.08),
+    0 18px 40px -6px rgba(6,0,18,.6),
+    0 4px 12px rgba(6,0,18,.35),
+    0 0 40px rgba(123,79,201,.32);
+}
+
+/* dome highlight (convex top), purple bounce light (bottom), side lens */
+.composer-glass::after {
   content: ''; position: absolute; inset: 0; z-index: -1;
   border-radius: inherit; pointer-events: none;
-  background: linear-gradient(180deg, rgba(255,255,255,.17) 0%, rgba(255,255,255,.05) 36%, rgba(255,255,255,0) 62%);
+  background:
+    radial-gradient(130% 110% at 50% -25%, rgba(255,255,255,.30), rgba(255,255,255,.07) 40%, transparent 64%),
+    radial-gradient(95% 85% at 50% 140%, rgba(139,92,214,.40), transparent 62%),
+    linear-gradient(90deg, rgba(255,255,255,.07), transparent 20%, transparent 80%, rgba(255,255,255,.07));
+  opacity: .8; transition: opacity .55s ease;
 }
-.composer-glass:focus-within {
-  border-color: rgba(255,255,255,.30);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.55),
-    inset 0 -1px 0 rgba(255,255,255,.10),
-    inset 1px 0 0 rgba(255,255,255,.14),
-    inset -1px 0 0 rgba(255,255,255,.14),
-    inset 0 0 18px rgba(255,255,255,.07),
-    0 10px 30px rgba(0,0,0,.40),
-    0 1px 3px rgba(0,0,0,.28);
+.composer.expanded .composer-glass::after { opacity: 1; }
+
+/* rim light: white specular + cyan / purple / pink from the site palette */
+.composer-glass::before {
+  content: ''; position: absolute; inset: 0; z-index: 2;
+  border-radius: inherit; padding: 1.3px; pointer-events: none;
+  background: conic-gradient(from var(--rim-angle),
+    rgba(255,255,255,.95) 0deg, rgba(95,241,224,.55) 70deg, rgba(123,79,201,.16) 140deg,
+    rgba(239,111,201,.55) 215deg, rgba(123,79,201,.18) 290deg, rgba(255,255,255,.95) 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: .8; transition: opacity .55s ease;
 }
-.composer-glass .composer-input::placeholder { color: rgba(255,255,255,.42); }
-.composer-glass .icon-btn { color: rgba(255,255,255,.75); }
+.composer.expanded .composer-glass::before { opacity: 1; animation: rimSpin 9s linear infinite; }
+@keyframes rimSpin { to { --rim-angle: 490deg; } }
+
+/* touch light */
+.glass-glow {
+  position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  opacity: 0; transition: opacity .35s ease;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,.34), rgba(190,150,255,.12) 28%, transparent 56%);
+}
+.composer-glass.touching .glass-glow { opacity: 1; }
+
+/* text field melts into the glass */
+.composer-glass .composer-input-wrap { align-self: center; flex: 1; min-width: 0; }
+.composer-glass .composer-input,
+.composer-glass .composer-input:focus {
+  border: none; background: transparent; box-shadow: none; border-radius: 0;
+  padding: 10px 6px; font-size: 16px; line-height: 1.4;
+  color: var(--text-1); caret-color: var(--neon-cyan);
+}
+.composer-glass .composer-input::placeholder { color: rgba(255,255,255,.42); transition: color .3s ease; }
+.composer.expanded .composer-input::placeholder { color: rgba(255,255,255,.26); }
+
+.composer-glass .icon-btn {
+  width: 40px; height: 40px; flex-shrink: 0;
+  background: rgba(255,255,255,.06); color: rgba(255,255,255,.8);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(0,0,0,.14);
+  transition: background .25s ease, transform .35s cubic-bezier(.34,1.56,.64,1);
+}
+.composer-glass .icon-btn:hover { background: rgba(255,255,255,.1); }
+.composer-glass .icon-btn:active { transform: scale(.86); }
+.composer-glass .icon-btn.active { background: rgba(155,89,182,.5); color: #fff; }
+
+/* send button: glossy glass bead tinted with the site's purple */
 .composer-glass .send-btn {
-  background: linear-gradient(180deg, rgba(176,108,222,.96), rgba(112,64,190,.96));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.5), inset 0 -1px 0 rgba(0,0,0,.12), 0 3px 10px rgba(110,60,190,.45);
+  position: relative; overflow: hidden;
+  width: 40px; height: 40px; border: none; border-radius: 50%; flex-shrink: 0; color: #fff;
+  background: linear-gradient(150deg, #cf9cf5 0%, #9b59d4 38%, #6a3fb0 72%, #4b2d8a 100%);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.65),
+    inset 0 -3px 6px rgba(40,10,90,.35),
+    inset 0 0 0 .5px rgba(255,255,255,.2),
+    0 5px 14px rgba(123,79,201,.55),
+    0 1px 3px rgba(0,0,0,.35);
+  transition: transform .5s cubic-bezier(.34,1.56,.64,1), opacity .3s ease, filter .3s ease, box-shadow .3s ease;
 }
+.composer-glass .send-btn::before {
+  content: ''; position: absolute; left: 14%; right: 14%; top: 5%; height: 46%;
+  border-radius: 50% 50% 60% 60% / 70% 70% 40% 40%;
+  background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0));
+  pointer-events: none;
+}
+.composer-glass .send-btn svg { position: relative; }
+.composer-glass .send-btn:hover { transform: none; }
+.composer-glass .send-btn:active { transform: scale(.82); transition-duration: .12s; }
+.composer-glass .send-btn.empty { opacity: .55; filter: saturate(.45); transform: scale(.88); }
+.composer-glass .send-btn.empty:hover { transform: scale(.88); box-shadow: inherit; }
+.composer-glass .send-btn.empty:active { transform: scale(.8); }
+
+/* reply / edit chip in the same glass language */
 .reply-preview {
+  margin: 0 12px 6px;
   background: rgba(20,12,34,.36);
   border: .5px solid rgba(255,255,255,.18);
-  -webkit-backdrop-filter: blur(20px) saturate(185%);
-  backdrop-filter: blur(20px) saturate(185%);
+  border-radius: 18px;
+  -webkit-backdrop-filter: blur(18px) saturate(190%);
+  backdrop-filter: blur(18px) saturate(190%);
   box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 20px rgba(0,0,0,.35);
 }

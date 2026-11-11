@@ -370,6 +370,7 @@
     messageInput.style.height = 'auto';
     messageInput.style.height = Math.min(messageInput.scrollHeight, 110) + 'px';
     sendBtn.classList.toggle('empty', !messageInput.value.trim());
+    updateComposerExpanded();
   }
 
   // ========================================================
@@ -1435,8 +1436,8 @@
     autoGrow();
   }
 
-  function openEmojiPanel() { emojiPanel.classList.add('open'); emojiToggleBtn.classList.add('active'); emojiPanelOpen = true; }
-  function closeEmojiPanel() { emojiPanel.classList.remove('open'); emojiToggleBtn.classList.remove('active'); emojiPanelOpen = false; pendingReactionTargetKey = null; }
+  function openEmojiPanel() { emojiPanel.classList.add('open'); emojiToggleBtn.classList.add('active'); emojiPanelOpen = true; updateComposerExpanded(); }
+  function closeEmojiPanel() { emojiPanel.classList.remove('open'); emojiToggleBtn.classList.remove('active'); emojiPanelOpen = false; pendingReactionTargetKey = null; updateComposerExpanded(); }
   emojiToggleBtn.addEventListener('click', () => { if (emojiPanelOpen) closeEmojiPanel(); else openEmojiPanel(); });
 
   document.addEventListener('pointerdown', (e) => {
@@ -1629,6 +1630,49 @@
       tone(ctx, 1175, t + 0.09, 0.28, 0.15);
     }
   }
+
+  // ---------- Liquid-glass composer: alive + follows the keyboard ----------
+  const composerEl = document.querySelector('.composer');
+  const glassEl = document.querySelector('.composer-glass');
+
+  // wide capsule while typing / emoji open / has text; narrower floating capsule at rest
+  function updateComposerExpanded() {
+    composerEl.classList.toggle('expanded',
+      document.activeElement === messageInput || emojiPanelOpen || !!messageInput.value.trim());
+  }
+  messageInput.addEventListener('focus', updateComposerExpanded);
+  messageInput.addEventListener('blur', () => setTimeout(updateComposerExpanded, 0));
+
+  // touch light: a soft highlight follows the finger across the glass
+  function moveGlow(e) {
+    const r = glassEl.getBoundingClientRect();
+    glassEl.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100) + '%');
+    glassEl.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100) + '%');
+  }
+  glassEl.addEventListener('pointerdown', (e) => { moveGlow(e); glassEl.classList.add('touching'); });
+  glassEl.addEventListener('pointermove', (e) => { if (glassEl.classList.contains('touching')) moveGlow(e); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) =>
+    glassEl.addEventListener(ev, () => glassEl.classList.remove('touching')));
+
+  // When a phone keyboard overlays the page (visual viewport shrinks), resize the app to the
+  // visible area so the capsule rides on top of the keyboard instead of hiding behind it.
+  (function followKeyboard() {
+    const vv = window.visualViewport;
+    const appEl = document.querySelector('.app');
+    if (!vv || !appEl) return;
+    const sync = () => {
+      if (window.innerHeight - vv.height > 80) {
+        document.documentElement.style.setProperty('--app-h', vv.height + 'px');
+        appEl.style.transform = vv.offsetTop ? 'translateY(' + vv.offsetTop + 'px)' : '';
+      } else {
+        document.documentElement.style.removeProperty('--app-h');
+        appEl.style.transform = '';
+      }
+    };
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    sync();
+  })();
 
   // ---------- Presence: show as offline the moment the user leaves ----------
   function announcePresence() {
