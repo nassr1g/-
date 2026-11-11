@@ -11,7 +11,7 @@
   // ---------- Config ----------
   const firebaseConfig = {
     apiKey: "AIzaSyDTVX_LM8wtrgAGgCzFAOVb5AV5d_ieI9k",
-    authDomain: "otaku2-e2764.firebaseapp.com",
+    authDomain: "friends-room-topaz.vercel.app",
     databaseURL: "https://otaku2-e2764-default-rtdb.firebaseio.com",
     projectId: "otaku2-e2764",
     storageBucket: "otaku2-e2764.firebasestorage.app",
