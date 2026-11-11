@@ -15,21 +15,61 @@
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <title>ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="auth.css">
 </head>
 <body>
   <canvas id="auroraCanvas" class="aurora-canvas"></canvas>
 
-  <!-- Name / identity modal -->
-  <div class="name-overlay" id="nameOverlay">
-    <div class="name-card">
-      <div class="brand-mark" id="nameModalBrand">ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ</div>
-      <p class="sub">اختر اسمًا للانضمام إلى المحادثة</p>
-      <div class="field">
-        <input type="text" id="nameInput" placeholder=" " maxlength="20" autocomplete="off">
-        <label for="nameInput">اسمك</label>
+  <!-- Auth overlay: login / signup / verify / profile setup -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-card">
+      <div class="brand-mark">ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ</div>
+      <div class="auth-tabs" id="authTabs" data-active="login" style="display:none;"><i class="ink"></i><button data-tab="login" class="active">تسجيل الدخول</button><button data-tab="signup">حساب جديد</button></div>
+      <div class="auth-stage">
+        <section class="auth-pane active" data-pane="loading"><div class="spinner big"></div></section>
+        <section class="auth-pane" data-pane="login">
+          <label class="afield"><span>البريد الإلكتروني</span><input id="liEmail" type="email" dir="ltr" autocomplete="email" autocapitalize="none"></label>
+          <label class="afield"><span>كلمة المرور</span><div class="pw"><input id="liPass" type="password" dir="ltr" autocomplete="current-password"><button type="button" class="eye" data-eye="liPass">إظهار</button></div></label>
+          <button class="abtn primary" id="liBtn" data-submit><span>دخول</span><i class="spinner"></i></button>
+          <div class="adiv"><span>أو</span></div>
+          <button class="abtn ghost" data-google><b class="gl">G</b><span>المتابعة باستخدام Google</span><i class="spinner"></i></button>
+          <button class="alink" data-pane-go="forgot">نسيت كلمة المرور؟</button>
+          <div class="amsg" data-msg></div>
+        </section>
+        <section class="auth-pane" data-pane="signup">
+          <label class="afield"><span>البريد الإلكتروني</span><input id="sgEmail" type="email" dir="ltr" autocomplete="email" autocapitalize="none"></label>
+          <label class="afield"><span>كلمة المرور (8 أحرف على الأقل)</span><div class="pw"><input id="sgPass" type="password" dir="ltr" autocomplete="new-password"><button type="button" class="eye" data-eye="sgPass">إظهار</button></div></label>
+          <button class="abtn primary" id="suEmailBtn" data-submit><span>إنشاء الحساب</span><i class="spinner"></i></button>
+          <div class="adiv"><span>أو</span></div>
+          <button class="abtn ghost" data-google><b class="gl">G</b><span>المتابعة باستخدام Google</span><i class="spinner"></i></button>
+          <div class="amsg" data-msg></div>
+        </section>
+        <section class="auth-pane" data-pane="forgot">
+          <h3>استعادة كلمة المرور</h3><p>سنرسل لك رابطًا لإعادة تعيين كلمة المرور.</p>
+          <label class="afield"><span>البريد الإلكتروني</span><input id="fgEmail" type="email" dir="ltr" autocomplete="email" autocapitalize="none"></label>
+          <button class="abtn primary" id="fgBtn" data-submit><span>إرسال الرابط</span><i class="spinner"></i></button>
+          <button class="alink" data-pane-go="login">العودة لتسجيل الدخول</button>
+          <div class="amsg" data-msg></div>
+        </section>
+        <section class="auth-pane" data-pane="verify">
+          <h3>تحقق من بريدك الإلكتروني</h3><p>أرسلنا رابط التحقق إلى <b id="vEmail"></b>. افتحه ثم ارجع هنا، وسيتم الدخول تلقائيًا.</p>
+          <button class="abtn primary" id="vDone" data-submit><span>تحققت من بريدي</span><i class="spinner"></i></button>
+          <button class="abtn ghost" id="vResend"><span>إعادة إرسال الرسالة</span><i class="spinner"></i></button>
+          <button class="alink" data-logout>تسجيل الخروج / استخدام بريد آخر</button>
+          <div class="amsg" data-msg></div>
+        </section>
+        <section class="auth-pane" data-pane="setup">
+          <h3>أكمل ملفك الشخصي</h3><p>اختر كيف سيراك الآخرون في المحادثة.</p>
+          <button class="av-pick" id="suPick" type="button"><div class="avatar" id="suAv"></div><span>إضافة صورة (اختياري)</span></button>
+          <input type="file" id="suFile" accept="image/*" hidden>
+          <label class="afield"><span>الاسم الظاهر</span><input id="suName" maxlength="20" autocomplete="off"></label>
+          <label class="afield"><span>اسم المستخدم</span><input id="suUser" maxlength="20" dir="ltr" autocomplete="off" autocapitalize="none"><small id="suHint"></small></label>
+          <label class="afield"><span>نبذة (اختياري)</span><textarea id="suBio" maxlength="160" rows="2"></textarea></label>
+          <button class="abtn primary" id="suBtn" data-submit><span>دخول إلى المحادثة</span><i class="spinner"></i></button>
+          <button class="alink" data-logout>تسجيل الخروج</button>
+          <div class="amsg" data-msg></div>
+        </section>
       </div>
-      <button id="joinBtn"><span>دخول</span></button>
-      <div class="err" id="nameErr"></div>
     </div>
   </div>
 
@@ -40,6 +80,7 @@
         <span class="brand-intro-text" id="brandIntroText">Hi!</span>
       </div>
       <div class="header-meta">
+        <button class="pill pill-btn" id="chatMenuBtn" aria-label="خيارات المحادثة"><svg viewBox="0 0 24 24" width="17" height="17"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg></button>
         <button class="pill pill-btn bell-btn" id="notifBtn" aria-label="الإشعارات">
           <svg viewBox="0 0 24 24" width="17" height="17"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path class="slash" d="M4 4l16 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
           <span class="notif-dot" id="notifDot" style="display:none;"></span>
@@ -50,6 +91,8 @@
         </button>
       </div>
     </header>
+
+    <button class="settings-fab" id="settingsFab" aria-label="الإعدادات"><svg viewBox="0 0 24 24" width="19" height="19"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="16" cy="7" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="10" cy="12" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="18" cy="17" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/></svg></button>
 
     <!-- Notification enable banner -->
     <div class="notif-banner" id="notifBanner" style="display:none;">
@@ -78,28 +121,85 @@
       </button>
     </div>
 
-    <!-- Notification settings sheet -->
+    <!-- Chat sheet: clear history stays in the chat screen -->
     <div class="sheet-backdrop" id="notifSheetBackdrop" style="display:none;">
       <div class="sheet">
         <div class="sheet-handle"></div>
-        <h4>الإعدادات</h4>
-        <div class="notif-status" id="notifStatus"></div>
-        <button class="notif-enable-btn" id="notifEnableBtn" style="display:none;">تفعيل الإشعارات</button>
-        <h4 class="notif-sub">كتم الإشعارات</h4>
-        <div class="notif-options" id="notifOptions">
-          <button class="notif-opt" data-mode="none"><span class="radio"></span><span class="opt-txt"><b>بدون كتم</b><small>تصلك كل الرسائل والردود</small></span></button>
-          <button class="notif-opt" data-mode="normal"><span class="radio"></span><span class="opt-txt"><b>كتم الرسائل العادية</b><small>يصلك فقط ما فيه رد عليك</small></span></button>
-          <button class="notif-opt" data-mode="all"><span class="radio"></span><span class="opt-txt"><b>كتم الكل</b><small>لا يصلك أي إشعار أو صوت</small></span></button>
-        </div>
-        <button class="notif-toggle" id="muteReactToggle" style="margin-top:8px;"><span class="opt-txt"><b>كتم إشعارات التفاعلات</b><small>لا يصلك إشعار عندما يتفاعل أحد على رسالتك</small></span><span class="switch"></span></button>
-        <h4 class="notif-sub">الصوت</h4>
-        <button class="notif-toggle on" id="chatTonesToggle"><span class="opt-txt"><b>نغمة المحادثات</b><small>أصوات الإرسال والاستلام والتفاعلات داخل الموقع</small></span><span class="switch"></span></button>
-        <h4 class="notif-sub">التفاعل السريع</h4>
-        <div class="quick-hint">انقر مرتين على أي رسالة للتفاعل بهذا الإيموجي</div>
-        <div class="quick-grid" id="quickGrid"></div>
-        <h4 class="notif-sub">المحادثة</h4>
+        <h4>المحادثة</h4>
         <button class="notif-toggle" id="clearHistoryBtn"><span class="opt-txt"><b>مسح سجل المحادثة</b><small>يُحذف من جهازك فقط ولا يتأثر الآخرون</small></span></button>
-        <button class="notif-enable-btn" id="installSheetBtn" style="display:none; margin-top:14px;">تثبيت التطبيق</button>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="settings" id="settingsPanel" aria-hidden="true">
+      <div class="set-head">
+        <button class="select-btn" id="setBack" aria-label="رجوع"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
+        <h3 id="setTitle">الإعدادات</h3>
+        <button class="select-btn" id="setClose" aria-label="إغلاق"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
+      </div>
+      <div class="set-body">
+        <section class="set-page active" data-page="main" data-title="الإعدادات">
+          <div class="set-me" id="setMe"></div>
+          <div class="set-list">
+            <button class="set-row" data-go="account"><b>الحساب والملف الشخصي</b><i>‹</i></button>
+            <button class="set-row" data-go="security"><b>الأمان والبريد وكلمة المرور</b><i>‹</i></button>
+            <button class="set-row" data-go="sessions"><b>الجلسات والأجهزة</b><i>‹</i></button>
+            <button class="set-row" data-go="notif"><b>الإشعارات</b><i>‹</i></button>
+            <button class="set-row" data-go="sound"><b>الصوت والتفاعل السريع</b><i>‹</i></button>
+          </div>
+          <button class="notif-enable-btn" id="installSheetBtn" style="display:none;">تثبيت التطبيق</button>
+          <button class="set-row danger" id="setLogout"><b>تسجيل الخروج</b></button>
+        </section>
+
+        <section class="set-page" data-page="account" data-title="الحساب والملف الشخصي">
+          <div class="av-edit"><div class="avatar xl" id="acAv"></div><div class="av-btns"><button class="chipbtn" id="acPick" type="button">تغيير الصورة</button><button class="chipbtn danger" id="acDelPhoto" type="button">حذف الصورة</button></div><input type="file" id="acFile" accept="image/*" hidden></div>
+          <label class="afield"><span>الاسم الظاهر</span><input id="acName" maxlength="20" autocomplete="off"></label>
+          <label class="afield"><span>اسم المستخدم</span><input id="acUser" maxlength="20" dir="ltr" autocomplete="off" autocapitalize="none"><small id="acUserHint"></small></label>
+          <label class="afield"><span>النبذة</span><textarea id="acBio" maxlength="160" rows="3"></textarea></label>
+          <button class="abtn primary" id="acSave"><span>حفظ التغييرات</span><i class="spinner"></i></button>
+          <div class="amsg" id="acMsg"></div>
+        </section>
+
+        <section class="set-page" data-page="security" data-title="الأمان">
+          <div id="secPwBoxes">
+            <div class="sec-box"><h5>تغيير البريد الإلكتروني</h5><p class="set-note" id="secEmailNow"></p>
+              <label class="afield"><span>البريد الجديد</span><input id="seNewEmail" type="email" dir="ltr" autocapitalize="none"></label>
+              <label class="afield"><span>كلمة المرور الحالية</span><input id="seEmailPw" type="password" dir="ltr" autocomplete="current-password"></label>
+              <button class="abtn primary" id="seEmailBtn"><span>إرسال رابط التحقق</span><i class="spinner"></i></button><div class="amsg" id="seEmailMsg"></div></div>
+            <div class="sec-box"><h5>تغيير كلمة المرور</h5>
+              <label class="afield"><span>كلمة المرور الحالية</span><input id="sePassOld" type="password" dir="ltr" autocomplete="current-password"></label>
+              <label class="afield"><span>كلمة المرور الجديدة (8 أحرف على الأقل)</span><input id="sePassNew" type="password" dir="ltr" autocomplete="new-password"></label>
+              <button class="abtn primary" id="sePassBtn"><span>تغيير كلمة المرور</span><i class="spinner"></i></button><div class="amsg" id="sePassMsg"></div></div>
+          </div>
+          <div class="set-note" id="secGoogleNote" style="display:none;">حسابك مرتبط بـ Google، لذا يُدار البريد وكلمة المرور من حساب Google.</div>
+          <div class="sec-box"><h5>حذف الحساب</h5><p class="set-note" style="direction:rtl">حذف نهائي لا يمكن التراجع عنه.</p>
+            <button class="abtn danger" id="secDelete"><span>حذف الحساب نهائيًا</span><i class="spinner"></i></button><div class="amsg" id="seDelMsg"></div></div>
+        </section>
+
+        <section class="set-page" data-page="sessions" data-title="الجلسات والأجهزة">
+          <p class="set-note">الأجهزة التي سجّلت الدخول منها. يمكنك إنهاء أي جلسة لا تعرفها.</p>
+          <div id="sessList"></div>
+          <button class="abtn danger" id="sessEndOthers" style="display:none;"><span>إنهاء كل الجلسات الأخرى</span></button>
+        </section>
+
+        <section class="set-page" data-page="notif" data-title="الإشعارات">
+          <div class="notif-status" id="notifStatus"></div>
+          <button class="notif-enable-btn" id="notifEnableBtn" style="display:none;">تفعيل الإشعارات</button>
+          <h4 class="set-sub">كتم الإشعارات</h4>
+          <div class="notif-options" id="notifOptions">
+            <button class="notif-opt" data-mode="none"><span class="radio"></span><span class="opt-txt"><b>بدون كتم</b><small>تصلك كل الرسائل والردود</small></span></button>
+            <button class="notif-opt" data-mode="normal"><span class="radio"></span><span class="opt-txt"><b>كتم الرسائل العادية</b><small>يصلك فقط ما فيه رد عليك</small></span></button>
+            <button class="notif-opt" data-mode="all"><span class="radio"></span><span class="opt-txt"><b>كتم الكل</b><small>لا يصلك أي إشعار أو صوت</small></span></button>
+          </div>
+          <button class="notif-toggle" id="muteReactToggle" style="margin-top:8px;"><span class="opt-txt"><b>كتم إشعارات التفاعلات</b><small>لا يصلك إشعار عندما يتفاعل أحد على رسالتك</small></span><span class="switch"></span></button>
+        </section>
+
+        <section class="set-page" data-page="sound" data-title="الصوت والتفاعل السريع">
+          <button class="notif-toggle on" id="chatTonesToggle"><span class="opt-txt"><b>نغمة المحادثات</b><small>أصوات الإرسال والاستلام والتفاعلات داخل الموقع</small></span><span class="switch"></span></button>
+          <h4 class="set-sub">التفاعل السريع</h4>
+          <div class="quick-hint">انقر مرتين على أي رسالة للتفاعل بهذا الإيموجي</div>
+          <div class="quick-grid" id="quickGrid"></div>
+        </section>
       </div>
     </div>
 
@@ -172,10 +272,12 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
 
   <script src="emoji-data.js"></script>
   <script src="aurora.js"></script>
+  <script src="auth.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

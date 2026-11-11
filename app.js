@@ -42,10 +42,6 @@
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
-  const nameOverlay = $('nameOverlay');
-  const nameInput = $('nameInput');
-  const joinBtn = $('joinBtn');
-  const nameErr = $('nameErr');
 
   const brandIntro = $('brandIntro');
   const brandIntroText = $('brandIntroText');
@@ -216,27 +212,6 @@
   // ========================================================
   // Name modal flow
   // ========================================================
-  function showNameOverlay() {
-    nameOverlay.style.display = 'flex';
-    setTimeout(() => nameInput.focus(), 250);
-  }
-  function hideNameOverlay() { nameOverlay.style.display = 'none'; }
-
-  function attemptJoin() {
-    const name = sanitizeName(nameInput.value);
-    if (name.length < 2) {
-      nameErr.textContent = 'الرجاء إدخال اسم صحيح (حرفين على الأقل)';
-      return;
-    }
-    saveName(name);
-    hideNameOverlay();
-    bootChat(true);
-  }
-
-  joinBtn.addEventListener('click', attemptJoin);
-  nameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); attemptJoin(); }
-  });
 
   // ========================================================
   // Connection + presence
@@ -302,7 +277,9 @@
     });
 
     usersRef.on('value', (snap) => {
-      const users = snap.val() || {};
+      const all = snap.val() || {};
+      const users = {};
+      Object.keys(all).forEach((k) => { if (all[k] && all[k].online === true) users[k] = all[k]; });
       const keys = Object.keys(users);
       onlineCount.textContent = keys.length;
       renderOnlineList(users);
@@ -596,6 +573,8 @@
     const row = document.createElement('div');
     row.className = `msg-row ${mine ? 'mine' : 'theirs'}`;
     row.dataset.key = key;
+    row.dataset.uid = data.senderUid || '';
+    row.dataset.ts = data.timestamp || 0;
     if (isNew) row.classList.add('appear');
 
     const shell = document.createElement('div');
@@ -604,7 +583,9 @@
     if (!mine) {
       const sender = document.createElement('div');
       sender.className = 'msg-sender';
-      sender.textContent = data.senderName || 'مجهول';
+      sender.dataset.uid = data.senderUid || '';
+      sender.dataset.fb = data.senderName || 'مجهول';
+      sender.textContent = FRAuth.nameOf(data.senderUid, data.senderName);
       shell.appendChild(sender);
     }
 
@@ -656,6 +637,7 @@
     reactionsRow.className = 'reactions-row';
     shell.appendChild(reactionsRow);
 
+    if (!mine) row.appendChild(FRAuth.mkAvatar(data.senderUid, data.senderName, 'msg-avatar'));
     row.appendChild(shell);
 
     const swipeIcon = document.createElement('div');
@@ -675,6 +657,7 @@
 
     allMessagesByKey.set(key, { data, el: row });
     welcomeCard.style.display = 'none';
+    scheduleRegroup();
 
     if (!isDeleted) {
       db.ref(`chat/messages/${key}/react`).on('value', (snap) => {
@@ -932,6 +915,7 @@
 
     function onPointerDown(e) {
       if (e.button !== undefined && e.button !== 0) return;
+      if (e.target.closest('.msg-avatar')) return;
       pointerId = e.pointerId;
       startX = e.clientX; startY = e.clientY;
       dx = 0; dy = 0;
@@ -1016,6 +1000,7 @@
     row.addEventListener('pointerdown', onPointerDown);
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (e.target.closest('.msg-avatar')) return;
       if (selectMode) return;
       openContextMenu(row, key, data, mine, { x: e.clientX, y: e.clientY });
     });
@@ -1580,13 +1565,15 @@
   }
 
   // Ask the server to fan the message out as push notifications.
-  function notifyServer(key, attempt, emoji) {
+  async function notifyServer(key, attempt, emoji) {
     if (!key) return;
     const body = { key, uid: myUid };
     if (emoji) { body.type = 'reaction'; body.emoji = emoji; }
+    let tok = '';
+    try { tok = await firebase.auth().currentUser.getIdToken(); } catch (e) {}
     fetch(NOTIFY_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok },
       body: JSON.stringify(body),
       keepalive: true
     }).then((r) => {
@@ -1736,8 +1723,7 @@
       try { seen = localStorage.getItem(LS_DBLHINT_KEY) === '1'; localStorage.setItem(LS_DBLHINT_KEY, '1'); } catch (er) {}
       if (!seen) showToast('تفاعلت بـ ' + quickEmoji + ' بنقرتين. تقدر تغيّر الإيموجي من الإعدادات.', 'تغيير', () => {
         updateNotifUI();
-        notifSheetBackdrop.style.display = 'flex';
-        setTimeout(() => quickGrid.scrollIntoView({ block: 'center', behavior: 'smooth' }), 120);
+        FRAuth.openSettings('sound');
       });
     } else {
       lastTap = { key, t: now };
@@ -1793,7 +1779,7 @@
     row.style.opacity = '0';
     row.style.margin = '0 4px';
     row.style.transform = 'scale(.94)';
-    setTimeout(() => row.remove(), 420);
+    setTimeout(() => { row.remove(); scheduleRegroup(); }, 420);
   }
 
   function dropMessageLocally(key) {
@@ -1922,13 +1908,13 @@
   function announcePresence() {
     if (!usersRef || !isConnected) return;
     const ref = usersRef.child(myUid);
-    ref.set({ name: myName, lastSeen: firebase.database.ServerValue.TIMESTAMP, online: true });
-    ref.onDisconnect().remove();
+    ref.onDisconnect().set(presenceOffline()).then(() => ref.set({ name: myName, online: true, lastSeen: firebase.database.ServerValue.TIMESTAMP }));
     typingRef.child(myUid).onDisconnect().remove();
   }
+  function presenceOffline() { return { name: myName, online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP }; }
   function withdrawPresence() {
     if (!usersRef) return;
-    usersRef.child(myUid).remove();
+    usersRef.child(myUid).set(presenceOffline());
     typingRef.child(myUid).remove();
   }
   document.addEventListener('visibilitychange', () => {
@@ -2048,7 +2034,8 @@
     updateInstallUI();
   }
 
-  notifBtn.addEventListener('click', () => { updateNotifUI(); notifSheetBackdrop.style.display = 'flex'; });
+  notifBtn.addEventListener('click', () => { updateNotifUI(); FRAuth.openSettings('notif'); });
+  $('chatMenuBtn').addEventListener('click', () => { notifSheetBackdrop.style.display = 'flex'; });
   notifSheetBackdrop.addEventListener('click', (e) => {
     if (e.target === notifSheetBackdrop) notifSheetBackdrop.style.display = 'none';
   });
@@ -2104,10 +2091,47 @@
   });
 
   // ========================================================
+  // Message grouping (name + avatar only on the first message of a run),
+  // avatar -> floating profile card, sign-out cleanup
+  // ========================================================
+  let regroupQueued = false;
+  function scheduleRegroup() {
+    if (regroupQueued) return;
+    regroupQueued = true;
+    requestAnimationFrame(() => { regroupQueued = false; regroup(); });
+  }
+  function regroup() {
+    let prev = null;
+    for (const el of messagesList.children) {
+      if (!el.classList.contains('msg-row')) { prev = null; continue; }
+      if (el.style.maxHeight === '0px') continue;
+      const a = Number(el.dataset.ts) || 0;
+      const cont = !!prev && prev.dataset.uid === el.dataset.uid &&
+        Math.abs(a - (Number(prev.dataset.ts) || 0)) < 300000 &&
+        new Date(a).toDateString() === new Date(Number(prev.dataset.ts) || 0).toDateString();
+      el.classList.toggle('cont', cont);
+      prev = el;
+    }
+  }
+  messagesList.addEventListener('click', (e) => {
+    const a = e.target.closest('.msg-avatar');
+    if (a) { e.stopPropagation(); FRAuth.openCard(a.dataset.uid, a, a.dataset.name); }
+  });
+
+  async function teardownForSignOut() {
+    if (!usersRef) return;
+    try { await usersRef.child(myUid).set(presenceOffline()); } catch (e) {}
+    try { usersRef.child(myUid).onDisconnect().cancel(); typingRef.child(myUid).onDisconnect().cancel(); typingRef.child(myUid).remove(); } catch (e) {}
+    try {
+      if (pushToken) await db.ref('chat/push/' + pushToken).remove();
+      if (messaging) await messaging.deleteToken();
+    } catch (e) {}
+  }
+
+  // ========================================================
   // Init
   // ========================================================
   function init() {
-    loadIdentity();
     loadMuteMode();
     loadLocalPrefs();
     brandIntroText.textContent = CONNECT_TEXT;
@@ -2116,12 +2140,18 @@
     buildEmojiPanel();
     updateConnectionUI();
 
-    if (myName) {
-      hideNameOverlay();
-      bootChat(false);
-    } else {
-      showNameOverlay();
-    }
+    if (!firebaseReady) { bootChat(false); return; }
+    FRAuth.start({
+      db,
+      onReady: (p, isNew) => { myUid = p.uid; myName = p.displayName; bootChat(isNew); },
+      onProfile: (p) => {
+        myName = p.displayName;
+        if (pushToken && db) db.ref('chat/push/' + pushToken).update({ name: myName }).catch(() => {});
+        if (usersRef && isConnected && document.visibilityState === 'visible') announcePresence();
+      },
+      beforeSignOut: teardownForSignOut,
+      refresh: () => updateNotifUI()
+    });
   }
 
   document.addEventListener('touchstart', () => {}, { passive: true });
