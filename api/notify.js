@@ -70,13 +70,14 @@ async function handleMessage(db, key, uid) {
 }
 
 async function handleReaction(db, key, uid, emoji) {
-  if (!/^[-\w]{1,100}$/.test(uid) || !emoji || emoji.length > 16 || /[.$#\[\]\/]/.test(emoji)) return [400, { error: 'bad-request' }];
+  if (!/^[-\w]{1,100}$/.test(uid) || !emoji || emoji.length > 16) return [400, { error: 'bad-request' }];
   const [msgSnap, recSnap] = await Promise.all([
     db.ref('chat/messages/' + key).get(),
-    db.ref('chat/messages/' + key + '/reactions/' + emoji + '/' + uid).get()
+    db.ref('chat/messages/' + key + '/react/' + uid).get()
   ]);
   if (!msgSnap.exists() || !recSnap.exists()) return [404, { error: 'no-reaction' }];
   const msg = msgSnap.val(), rec = recSnap.val();
+  if (rec.emoji !== emoji) return [409, { error: 'emoji-mismatch' }];
   if (msg.deleted || !msg.senderUid || msg.senderUid === uid) return [200, { skipped: 'self-or-deleted' }];
   if (!rec.ts || Date.now() - rec.ts > 2 * 60 * 1000) return [410, { error: 'too-old' }];
 
