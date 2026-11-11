@@ -67,12 +67,15 @@
 
 /* ---------- settings ---------- */
 .settings { position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(24,14,40,.92), rgba(13,7,22,.96)); -webkit-backdrop-filter: blur(22px) saturate(160%); backdrop-filter: blur(22px) saturate(160%); opacity: 0; visibility: hidden; transform: translateY(26px) scale(.98); transition: transform .45s cubic-bezier(.22,1,.36,1), opacity .3s ease, visibility .45s; }
+.settings { pointer-events: none; }
+.settings * { pointer-events: none; }
+.settings.open, .settings.open * { pointer-events: auto; }
 .settings.open { opacity: 1; visibility: visible; transform: none; }
 .set-head { display: flex; align-items: center; gap: 10px; padding: calc(12px + env(safe-area-inset-top)) 14px 12px; border-bottom: 1px solid rgba(255,255,255,.07); }
 .set-head h3 { flex: 1; font-size: 16px; font-weight: 700; }
 .set-body { position: relative; flex: 1; overflow: hidden; }
 .set-page { position: absolute; inset: 0; overflow-y: auto; padding: 16px 14px calc(26px + env(safe-area-inset-bottom)); opacity: 0; visibility: hidden; transform: translateX(-28px); transition: transform .4s cubic-bezier(.22,1,.36,1), opacity .28s ease, visibility .4s; }
-.set-page.active { opacity: 1; visibility: visible; transform: none; }
+.settings.open .set-page.active { opacity: 1; visibility: visible; transform: none; }
 .set-page.behind { transform: translateX(28px); }
 .set-me { display: flex; align-items: center; gap: 14px; padding: 16px; margin-bottom: 14px; border-radius: 22px; background: linear-gradient(135deg, rgba(155,89,182,.22), rgba(255,255,255,.04)); border: 1px solid rgba(155,89,182,.25); }
 .set-me-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
