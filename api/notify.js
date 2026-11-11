@@ -88,7 +88,7 @@ async function handleReaction(db, key, uid, emoji) {
   const messages = [], tokens = [];
   Object.keys(records).forEach((token) => {
     const r = records[token];
-    if (!r || r.uid !== msg.senderUid || r.mute !== 'none') return; // reactions are "normal" notifications
+    if (!r || r.uid !== msg.senderUid || r.mute !== 'none' || r.muteReact === true) return; // reactions are "normal" notifications
     tokens.push(token);
     messages.push(build(token, {
       type: 'reaction',
