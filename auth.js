@@ -4,20 +4,31 @@
    app.js starts it with FRAuth.start({ db, onReady, onProfile,
    beforeSignOut, refresh }).
    ========================================================= */
-/* FRNav: back-button layers (online list -> profile card ...) + exit guard */
+/* ============================================================================
+   ⚠️ تذكير إلزامي عند أي تعديل (للمطوّر / للذكاء الاصطناعي):
+   كل قائمة أو نافذة أو لوحة أو بطاقة عائمة جديدة يجب أن تدعم زر الرجوع في الهاتف.
+     - عند الفتح:            FRNav.push('اسم-فريد', دالة_الإغلاق_الفعلي)
+     - عند الإغلاق من الواجهة: FRNav.back('اسم-فريد')   (لا تُخفِ النافذة مباشرةً)
+   يجب أن يغلق زر الرجوع آخر طبقة مفتوحة أولًا، ولا يخرج من الموقع وهناك نافذة يمكن إغلاقها.
+   الحالات غير المتراكبة (مثل وضع التحديد) تُعالَج في closeTopSoft داخل app.js.
+   ============================================================================ */
 window.FRNav = (() => {
-  const layers = []; let hook = null, exiting = false, pend = false;
+  const layers = []; let hook = null, exiting = false, pend = false, pendTimer = null; const queue = [];
+  const doPush = (name, close) => { layers.push({ name, close }); history.pushState({ frL: layers.length }, ''); };
+  const flush = () => { while (queue.length) { const q = queue.shift(); doPush(q[0], q[1]); } };
   window.addEventListener('popstate', (e) => {
-    pend = false;
+    pend = false; clearTimeout(pendTimer);
     const s = e.state || {};
-    if (s.frs) return; // settings panel manages its own pages
-    const d = s.frL || 0;
+    const d = s.frs ? 0 : (s.frL || 0);
     while (layers.length > d) { const l = layers.pop(); try { l.close(); } catch (er) {} }
+    if (s.frs) { flush(); return; } // settings panel manages its own pages
+    if (s.frL && layers.length < s.frL) { history.back(); return; } // stale entry: skip it
     if (s.frRoot && hook) {
       if (exiting) { try { window.close(); } catch (er) {} setTimeout(() => history.back(), 0); return; }
       history.pushState({ frGuard: 1 }, '');
       hook();
     }
+    flush();
   });
   return {
     init(onRootBack) {
@@ -27,12 +38,14 @@ window.FRNav = (() => {
       if (s.frRoot) history.pushState({ frGuard: 1 }, '');
       else { history.replaceState({ frRoot: 1 }, ''); history.pushState({ frGuard: 1 }, ''); }
     },
-    push(name, close) { layers.push({ name, close }); history.pushState({ frL: layers.length }, ''); },
+    // a push requested while a back is in flight waits for it (prevents history races)
+    push(name, close) { if (pend) queue.push([name, close]); else doPush(name, close); },
     back(name) {
       const t = layers[layers.length - 1];
       if (pend || !t || t.name !== name) return;
-      pend = true; setTimeout(() => { pend = false; }, 700); history.back();
+      pend = true; pendTimer = setTimeout(() => { pend = false; flush(); }, 700); history.back();
     },
+    has(name) { return layers.some((l) => l.name === name); },
     exit() { exiting = true; history.back(); }
   };
 })();
@@ -350,11 +363,13 @@ window.FRNav = (() => {
       if (o.type) { ty = el('input'); ty.placeholder = 'اكتب: ' + o.type; ty.dir = 'ltr'; ty.autocapitalize = 'none'; c.appendChild(ty); }
       const ok = el('button', 'abtn ' + (o.danger ? 'danger' : 'primary'), o.label), no = el('button', 'abtn ghost', 'إلغاء');
       if (ty) { ok.disabled = true; ty.oninput = () => { ok.disabled = ty.value.trim().toLowerCase() !== o.type.toLowerCase(); }; }
-      const done = (v) => { b.classList.remove('show'); setTimeout(() => b.remove(), 250); res(v); };
+      let settled = false;
+      const done = (v, nav) => { if (settled) return; settled = true; b.classList.remove('show'); setTimeout(() => b.remove(), 250); if (!nav) FRNav.back('confirm'); res(v); };
       ok.onclick = () => done({ password: pw ? pw.value : '' }); no.onclick = () => done(null);
       b.addEventListener('pointerdown', (e) => { if (e.target === b) done(null); });
       c.appendChild(ok); c.appendChild(no); b.appendChild(c); document.body.appendChild(b);
       requestAnimationFrame(() => b.classList.add('show'));
+      FRNav.push('confirm', () => done(null, true));
     });
   }
   async function reauth(pw) {

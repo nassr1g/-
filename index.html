@@ -121,6 +121,7 @@
     <div class="select-bar" id="selectBar">
       <button class="select-btn" id="selectCancel" aria-label="إلغاء"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg></button>
       <span class="select-count" id="selectCount"></span>
+      <button class="select-btn copy" id="selectCopy" aria-label="نسخ"><svg viewBox="0 0 24 24" width="20" height="20"><rect x="9" y="9" width="11" height="11" rx="2.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></svg></button>
       <button class="select-btn danger" id="selectDelete" aria-label="حذف"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M5 7H19M10 11V16M14 11V16M6 7L7 19A2 2 0 0 0 9 21H15A2 2 0 0 0 17 19L18 7M9 7V4A1 1 0 0 1 10 3H14A1 1 0 0 1 15 4V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg></button>
     </div>
 
@@ -236,6 +237,8 @@
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
       <span class="jump-bottom-badge" id="jumpBottomBadge" style="display:none;">1</span>
     </button>
+
+    <div class="fast-scroll" id="fastScroll" aria-hidden="true"><div class="fs-thumb" id="fsThumb"><span class="fs-tip" id="fsTip"></span></div></div>
 
     <div class="bottom-dock" id="bottomDock">
 

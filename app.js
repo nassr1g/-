@@ -5,6 +5,15 @@
    Soft delete. Online list. Paginated history.
    ========================================================= */
 
+/* (راجع التذكير في auth.js: كل نافذة/قائمة جديدة يجب أن تدعم زر الرجوع عبر FRNav.push / FRNav.back) */
+/* ============================================================================
+   ⚠️ تذكير إلزامي عند أي تعديل (للمطوّر / للذكاء الاصطناعي):
+   كل قائمة أو نافذة أو لوحة أو بطاقة عائمة جديدة يجب أن تدعم زر الرجوع في الهاتف.
+     - عند الفتح:            FRNav.push('اسم-فريد', دالة_الإغلاق_الفعلي)
+     - عند الإغلاق من الواجهة: FRNav.back('اسم-فريد')   (لا تُخفِ النافذة مباشرةً)
+   يجب أن يغلق زر الرجوع آخر طبقة مفتوحة أولًا، ولا يخرج من الموقع وهناك نافذة يمكن إغلاقها.
+   الحالات غير المتراكبة (مثل وضع التحديد) تُعالَج في closeTopSoft داخل app.js.
+   ============================================================================ */
 (() => {
   'use strict';
 
@@ -92,6 +101,7 @@
   const selectCount = $('selectCount');
   const selectCancel = $('selectCancel');
   const selectDelete = $('selectDelete');
+  const selectCopy = $('selectCopy');
   const bottomDock = $('bottomDock');
   const installBanner = $('installBanner');
   const installBtn = $('installBtn');
@@ -372,13 +382,15 @@
     messageInput.style.height = target + 'px';
     sendBtn.classList.toggle('empty', !messageInput.value.trim());
     updateComposerExpanded();
+    scheduleDraft();
   }
 
   // ========================================================
   // Boot
   // ========================================================
   function bootChat(isFreshJoin) {
-    FRNav.init(() => { if (!closeTopSoft()) askExit(); });
+    FRNav.init(onRootBack);
+    restoreDraft();
     if (!firebaseReady) {
       showSystemError('لا يمكن الاتصال بقاعدة البيانات. تحقق من إعدادات Firebase.');
       return;
@@ -586,6 +598,16 @@
   // ========================================================
   // Rendering a message row
   // ========================================================
+  function dayLabel(ts) {
+    const d = new Date(ts), n = new Date();
+    const sd = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((sd(n) - sd(d)) / 864e5);
+    if (diff === 0) return 'اليوم';
+    if (diff === 1) return 'أمس';
+    if (diff > 1 && diff < 7) return d.toLocaleDateString('ar-u-nu-latn', { weekday: 'long' });
+    return d.toLocaleDateString('ar-u-nu-latn', d.getFullYear() === n.getFullYear() ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
   function formatTime(ts) {
     if (!ts) return '';
     const d = new Date(ts);
@@ -943,7 +965,7 @@
 
     function onPointerDown(e) {
       if (e.button !== undefined && e.button !== 0) return;
-      if (e.target.closest('.msg-avatar')) return;
+      if (e.target.closest('.msg-avatar, .reaction-chip')) return;
       pointerId = e.pointerId;
       startX = e.clientX; startY = e.clientY;
       dx = 0; dy = 0;
@@ -1052,7 +1074,10 @@
     });
   }
 
-  function closeContextMenu() {
+  let ctxLayer = false;
+  function closeContextMenu() { if (ctxLayer) FRNav.back('ctx'); }
+  function hideContextMenu() {
+    ctxLayer = false;
     if (!ctxMenuEl) return;
     ctxMenuEl.classList.remove('show');
     ctxBackdropEl.classList.remove('show');
@@ -1063,6 +1088,7 @@
 
   function openContextMenu(row, key, data, mine, point) {
     ensureCtxDom();
+    if (!ctxLayer) { ctxLayer = true; FRNav.push('ctx', hideContextMenu); }
     clearTimeout(ctxCloseTimer);
     ctxMenuEl.classList.remove('show');
     ctxBackdropEl.classList.remove('show');
@@ -1093,6 +1119,10 @@
       closeContextMenu();
     });
     list.appendChild(replyItem);
+    if (!data.deleted) list.appendChild(makeCtxItem(copyGlyphMenu(), 'نسخ الرسالة', () => {
+      closeContextMenu();
+      copyText(((allMessagesByKey.get(key) || { data }).data.text) || '', 1);
+    }));
     list.appendChild(makeCtxItem(checkGlyphMenu(), 'تحديد', () => { enterSelect(key); closeContextMenu(); }));
 
     if (mine && !data.deleted) {
@@ -1187,6 +1217,20 @@
     wrap.setAttribute('viewBox', '0 0 24 24'); wrap.setAttribute('width', '18'); wrap.setAttribute('height', '18');
     wrap.innerHTML = '<path d="M5 7H19M10 11V16M14 11V16M6 7L7 19A2 2 0 0 0 9 21H15A2 2 0 0 0 17 19L18 7M9 7V4A1 1 0 0 1 10 3H14A1 1 0 0 1 15 4V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>';
     return wrap;
+  }
+  function copyGlyphMenu() {
+    const wrap = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    wrap.setAttribute('viewBox', '0 0 24 24'); wrap.setAttribute('width', '18'); wrap.setAttribute('height', '18');
+    wrap.innerHTML = '<rect x="9" y="9" width="11" height="11" rx="2.5" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M15 9V6.5A2.5 2.5 0 0 0 12.5 4h-6A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15H9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/>';
+    return wrap;
+  }
+  async function copyText(t, n) {
+    try { await navigator.clipboard.writeText(t); }
+    catch (e) {
+      const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;top:0;opacity:0;';
+      document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch (er) {} ta.remove();
+    }
+    showToast(n > 1 ? 'تم نسخ ' + n + ' رسائل' : 'تم نسخ الرسالة', null, null, false, 1800);
   }
   function editGlyphMenu() {
     const wrap = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -1384,9 +1428,9 @@
       const countSpan = document.createElement('span'); countSpan.className = 'count'; countSpan.textContent = uids.length;
       chip.appendChild(emoSpan); chip.appendChild(countSpan);
 
-      chip.addEventListener('click', (e) => { e.stopPropagation(); toggleMyReaction(key, emoji); });
-      let pressTimer = null;
-      chip.addEventListener('pointerdown', () => { pressTimer = setTimeout(() => showWhoReacted(emoji, usersMap), 380); });
+      let pressTimer = null, longFired = false;
+      chip.addEventListener('click', (e) => { e.stopPropagation(); if (longFired) { longFired = false; return; } toggleMyReaction(key, emoji); });
+      chip.addEventListener('pointerdown', () => { longFired = false; pressTimer = setTimeout(() => { longFired = true; showWhoReacted(reactions, emoji); }, 380); });
       chip.addEventListener('pointerup', () => clearTimeout(pressTimer));
       chip.addEventListener('pointerleave', () => clearTimeout(pressTimer));
 
@@ -1394,26 +1438,36 @@
     });
   }
 
-  function showWhoReacted(emoji, usersMap) {
+  // Reactors list: same style as the online list (avatar + name + emoji); tap opens the profile card.
+  function showWhoReacted(reactions, focus) {
     const backdrop = document.createElement('div');
     backdrop.className = 'sheet-backdrop';
     const sheet = document.createElement('div');
     sheet.className = 'sheet';
     const handle = document.createElement('div'); handle.className = 'sheet-handle';
-    const h4 = document.createElement('h4'); h4.textContent = `تفاعل بـ ${emoji}`;
+    const h4 = document.createElement('h4'); h4.textContent = 'التفاعلات';
     sheet.appendChild(handle); sheet.appendChild(h4);
-
-    Object.values(usersMap).forEach(u => {
-      const row = document.createElement('div'); row.className = 'sheet-row';
-      const nameSpan = document.createElement('span'); nameSpan.textContent = (u && u.name) || 'مجهول';
-      const emoSpan = document.createElement('span'); emoSpan.className = 'emo'; emoSpan.textContent = emoji;
-      row.appendChild(nameSpan); row.appendChild(emoSpan);
+    const list = [];
+    Object.keys(reactions || {}).forEach((em) => Object.keys(reactions[em] || {}).forEach((uid) => {
+      const v = reactions[em][uid] || {};
+      list.push({ uid, emoji: em, name: v.name, ts: v.ts || 0 });
+    }));
+    list.sort((x, y) => ((y.emoji === focus) - (x.emoji === focus)) || (x.ts - y.ts));
+    list.forEach((u) => {
+      const name = FRAuth.nameOf(u.uid, u.name);
+      const row = document.createElement('div'); row.className = 'sheet-row'; row.style.cursor = 'pointer';
+      const left = document.createElement('div'); left.className = 'sheet-row-left';
+      const nm = document.createElement('span'); nm.textContent = name;
+      left.appendChild(FRAuth.mkAvatar(u.uid, name, 'sm')); left.appendChild(nm);
+      const emo = document.createElement('span'); emo.className = 'emo'; emo.textContent = u.emoji;
+      row.appendChild(left); row.appendChild(emo);
+      row.addEventListener('click', () => FRAuth.openCard(u.uid, row, name));
       sheet.appendChild(row);
     });
-
     backdrop.appendChild(sheet);
-    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) FRNav.back('sheet'); });
     document.body.appendChild(backdrop);
+    FRNav.push('sheet', () => backdrop.remove());
   }
 
   // ========================================================
@@ -1470,8 +1524,9 @@
     autoGrow();
   }
 
-  function openEmojiPanel() { emojiPanel.classList.add('open'); emojiToggleBtn.classList.add('active'); emojiPanelOpen = true; updateComposerExpanded(); }
-  function closeEmojiPanel() { emojiPanel.classList.remove('open'); emojiToggleBtn.classList.remove('active'); emojiPanelOpen = false; pendingReactionTargetKey = null; updateComposerExpanded(); }
+  function openEmojiPanel() { if (!emojiPanelOpen) FRNav.push('emoji', hideEmojiPanel); emojiPanel.classList.add('open'); emojiToggleBtn.classList.add('active'); emojiPanelOpen = true; updateComposerExpanded(); }
+  function closeEmojiPanel() { if (emojiPanelOpen) FRNav.back('emoji'); }
+  function hideEmojiPanel() { emojiPanel.classList.remove('open'); emojiToggleBtn.classList.remove('active'); emojiPanelOpen = false; pendingReactionTargetKey = null; updateComposerExpanded(); }
   emojiToggleBtn.addEventListener('click', () => { if (emojiPanelOpen) closeEmojiPanel(); else openEmojiPanel(); });
 
   document.addEventListener('pointerdown', (e) => {
@@ -1758,7 +1813,7 @@
     }
   }
 
-  function showToast(text, actionLabel, onAction, isErr) {
+  function showToast(text, actionLabel, onAction, isErr, dur) {
     const old = document.querySelector('.app-toast');
     if (old) old.remove();
     const t = document.createElement('div');
@@ -1774,7 +1829,7 @@
     }
     $('floatStack').appendChild(t);
     requestAnimationFrame(() => t.classList.add('show'));
-    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, isErr ? 4500 : 7000);
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, dur || (isErr ? 4500 : 7000));
   }
 
   // ---------- Local-only deletion: hide chosen messages / clear the whole history on this device ----------
@@ -1850,7 +1905,7 @@
     const h4 = document.createElement('h4'); h4.textContent = title;
     sheet.appendChild(handle); sheet.appendChild(h4);
     if (desc) { const p = document.createElement('div'); p.className = 'quick-hint'; p.textContent = desc; sheet.appendChild(p); }
-    const close = () => backdrop.remove();
+    const close = () => FRNav.back('sheet');
     actions.concat([{ label: 'إلغاء', cancel: true }]).forEach((a) => {
       const b = document.createElement('button');
       b.className = 'sheet-btn' + (a.danger ? ' danger' : '') + (a.cancel ? ' cancel' : '');
@@ -1862,10 +1917,11 @@
     backdrop.appendChild(sheet);
     backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
     document.body.appendChild(backdrop);
+    FRNav.push('sheet', () => backdrop.remove());
   }
 
   clearHistoryBtn.addEventListener('click', () => {
-    notifSheetBackdrop.style.display = 'none';
+    closeNotifSheet();
     openActionSheet('مسح سجل المحادثة؟', 'ستُحذف كل الرسائل من جهازك فقط. لن يتأثر الآخرون، وتصلك الرسائل الجديدة كالمعتاد.', [
       { label: 'مسح السجل', danger: true, onClick: clearHistoryLocal }
     ]);
@@ -1897,6 +1953,25 @@
     selectCount.textContent = selected.size ? 'تم تحديد ' + selected.size : '';
     if (!selected.size) exitSelect();
   }
+  function copySelected() {
+    const items = [...selected].map((k) => allMessagesByKey.get(k)).filter((e) => e && !e.data.deleted);
+    if (!items.length) { exitSelect(); return; }
+    items.sort((x, y) => (Number(x.data.timestamp) || 0) - (Number(y.data.timestamp) || 0)); // original order
+    let text;
+    if (items.length === 1) text = items[0].data.text || '';
+    else {
+      const parts = []; let lastDay = '';
+      items.forEach((e) => {
+        const ts = Number(e.data.timestamp) || 0, day = new Date(ts).toDateString();
+        if (day !== lastDay) { lastDay = day; parts.push('—— ' + dayLabel(ts) + ' ——'); }
+        parts.push(FRAuth.nameOf(e.data.senderUid, e.data.senderName) + ' (' + formatTime(ts) + '):\n' + (e.data.text || ''));
+      });
+      text = parts.join('\n\n');
+    }
+    copyText(text, items.length);
+    exitSelect();
+  }
+  selectCopy.addEventListener('click', copySelected);
   selectCancel.addEventListener('click', exitSelect);
   selectDelete.addEventListener('click', () => { const keys = [...selected]; if (keys.length) askDelete(keys, exitSelect); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && selectMode) exitSelect(); });
@@ -2055,9 +2130,15 @@
   }
 
   notifBtn.addEventListener('click', () => { updateNotifUI(); FRAuth.openSettings('notif'); });
-  $('chatMenuBtn').addEventListener('click', () => { notifSheetBackdrop.style.display = 'flex'; });
+  function openNotifSheet() {
+    if (notifSheetBackdrop.style.display === 'flex') return;
+    notifSheetBackdrop.style.display = 'flex';
+    FRNav.push('chatmenu', () => { notifSheetBackdrop.style.display = 'none'; });
+  }
+  function closeNotifSheet() { if (notifSheetBackdrop.style.display === 'flex') FRNav.back('chatmenu'); }
+  $('chatMenuBtn').addEventListener('click', openNotifSheet);
   notifSheetBackdrop.addEventListener('click', (e) => {
-    if (e.target === notifSheetBackdrop) notifSheetBackdrop.style.display = 'none';
+    if (e.target === notifSheetBackdrop) closeNotifSheet();
   });
   notifOptions.addEventListener('click', (e) => {
     const btn = e.target.closest('.notif-opt');
@@ -2099,7 +2180,7 @@
   });
   window.addEventListener('appinstalled', () => { deferredInstall = null; updateInstallUI(); });
   installBtn.addEventListener('click', promptInstall);
-  installSheetBtn.addEventListener('click', () => { notifSheetBackdrop.style.display = 'none'; promptInstall(); });
+  installSheetBtn.addEventListener('click', () => { closeNotifSheet(); promptInstall(); });
   installClose.addEventListener('click', () => {
     installBannerHidden = true;
     installBanner.style.display = 'none';
@@ -2120,18 +2201,30 @@
     regroupQueued = true;
     requestAnimationFrame(() => { regroupQueued = false; regroup(); });
   }
+  function makeDateSep() { const s = document.createElement('div'); s.className = 'date-sep'; s.appendChild(document.createElement('span')); return s; }
   function regroup() {
-    let prev = null;
-    for (const el of messagesList.children) {
+    let prev = null, lastDay = '';
+    const kids = [...messagesList.children], keep = new Set();
+    for (const el of kids) {
+      if (el.classList.contains('date-sep')) continue;
       if (!el.classList.contains('msg-row')) { prev = null; continue; }
       if (el.style.maxHeight === '0px') continue;
-      const a = Number(el.dataset.ts) || 0;
+      const a = Number(el.dataset.ts) || 0, day = new Date(a).toDateString();
+      if (day !== lastDay) { // date divider before the first message of each day
+        lastDay = day;
+        let s = el.previousElementSibling;
+        if (!(s && s.classList.contains('date-sep'))) { s = makeDateSep(); messagesList.insertBefore(s, el); }
+        const lbl = dayLabel(a);
+        if (s.firstChild.textContent !== lbl) s.firstChild.textContent = lbl;
+        keep.add(s);
+      }
       const cont = !!prev && prev.dataset.uid === el.dataset.uid &&
         Math.abs(a - (Number(prev.dataset.ts) || 0)) < 300000 &&
         new Date(a).toDateString() === new Date(Number(prev.dataset.ts) || 0).toDateString();
       el.classList.toggle('cont', cont);
       prev = el;
     }
+    kids.forEach((el) => { if (el.classList.contains('date-sep') && !keep.has(el)) el.remove(); });
   }
   messagesList.addEventListener('click', (e) => {
     const a = e.target.closest('.msg-avatar');
@@ -2205,32 +2298,75 @@
   }
 
   // ---------- back button: close soft overlays first, otherwise ask before leaving ----------
+  // Only non-stacked states live here (selection mode). Every real window/menu is an FRNav layer.
   function closeTopSoft() {
-    if (ctxMenuEl && ctxMenuEl.classList.contains('show')) { closeContextMenu(); return true; }
-    const dyn = document.body.querySelectorAll(':scope > .sheet-backdrop');
-    if (dyn.length) { dyn[dyn.length - 1].remove(); return true; }
-    if (notifSheetBackdrop.style.display === 'flex') { notifSheetBackdrop.style.display = 'none'; return true; }
     if (selectMode) { exitSelect(); return true; }
-    if (emojiPanelOpen) { closeEmojiPanel(); return true; }
     return false;
   }
-  function askExit() {
-    const old = document.querySelector('.cm-back.exit-confirm');
-    if (old) { old.classList.remove('show'); setTimeout(() => old.remove(), 250); return; }
-    const b = document.createElement('div'); b.className = 'cm-back exit-confirm';
-    const c = document.createElement('div'); c.className = 'cm';
-    const h = document.createElement('h4'); h.textContent = 'الخروج من الموقع؟';
-    const p = document.createElement('p'); p.textContent = 'هل تريد الخروج من المحادثة؟';
-    const stay = document.createElement('button'); stay.className = 'abtn primary'; stay.textContent = 'البقاء في الموقع';
-    const out = document.createElement('button'); out.className = 'abtn ghost'; out.textContent = 'الخروج';
-    const close = () => { b.classList.remove('show'); setTimeout(() => b.remove(), 250); };
-    stay.addEventListener('click', close);
-    out.addEventListener('click', () => { close(); FRNav.exit(); });
-    b.addEventListener('pointerdown', (e) => { if (e.target === b) close(); });
-    c.appendChild(h); c.appendChild(p); c.appendChild(stay); c.appendChild(out); b.appendChild(c);
-    document.body.appendChild(b);
-    requestAnimationFrame(() => b.classList.add('show'));
+  let exitArmed = false, exitTimer = null;
+  function onRootBack() {
+    if (closeTopSoft()) return;
+    if (exitArmed) { clearTimeout(exitTimer); exitArmed = false; FRNav.exit(); return; }
+    exitArmed = true;
+    showToast('حاول مرة أخرى للخروج', null, null, false, 2200);
+    exitTimer = setTimeout(() => { exitArmed = false; }, 2200);
   }
+
+  // ---------- drafts: the composer text survives leaving / reloading the site ----------
+  const LS_DRAFT_KEY = 'otaku_draft_v1_';
+  let draftTimer = null;
+  function saveDraft() {
+    if (editingKey || !myUid) return;
+    try { const v = messageInput.value; if (v.trim()) localStorage.setItem(LS_DRAFT_KEY + myUid, v); else localStorage.removeItem(LS_DRAFT_KEY + myUid); } catch (e) {}
+  }
+  function scheduleDraft() { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 250); }
+  function restoreDraft() {
+    try { const v = localStorage.getItem(LS_DRAFT_KEY + myUid); if (v && !messageInput.value) { messageInput.value = v; autoGrow(); } } catch (e) {}
+  }
+  window.addEventListener('pagehide', saveDraft);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
+
+  // ---------- fast scrollbar: appears while scrolling, draggable, fades out when idle ----------
+  (function fastScroll() {
+    const fs = $('fastScroll'), thumb = $('fsThumb'), tip = $('fsTip');
+    if (!fs) return;
+    let hideT = null, drag = false, raf = 0, grab = 0;
+    const metrics = () => {
+      const ch = messagesWrap.clientHeight, sh = messagesWrap.scrollHeight, trackH = fs.clientHeight;
+      return { ch, sh, trackH, th: Math.max(46, Math.min(trackH, trackH * ch / Math.max(sh, 1))), max: Math.max(1, sh - ch) };
+    };
+    const place = () => {
+      raf = 0;
+      const m = metrics(), r = Math.min(1, Math.max(0, messagesWrap.scrollTop / m.max));
+      thumb.style.height = m.th + 'px';
+      thumb.style.transform = 'translateY(' + (r * (m.trackH - m.th)) + 'px)';
+    };
+    const armHide = () => { clearTimeout(hideT); hideT = setTimeout(() => { if (!drag) fs.classList.remove('show'); }, 1300); };
+    const show = () => { const m = metrics(); if (m.sh < m.ch * 1.6) return; fs.classList.add('show'); armHide(); };
+    const updateTip = () => {
+      const top = messagesWrap.getBoundingClientRect().top + 24;
+      for (const el of messagesList.children) {
+        if (el.classList.contains('msg-row') && el.getBoundingClientRect().bottom > top) { tip.textContent = dayLabel(Number(el.dataset.ts) || Date.now()); return; }
+      }
+    };
+    messagesWrap.addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(place); show(); }, { passive: true });
+    if (window.ResizeObserver) new ResizeObserver(() => { if (!raf) raf = requestAnimationFrame(place); }).observe(messagesWrap);
+    thumb.addEventListener('pointerdown', (e) => {
+      drag = true; cancelSmooth(); grab = e.clientY - thumb.getBoundingClientRect().top;
+      try { thumb.setPointerCapture(e.pointerId); } catch (er) {}
+      fs.classList.add('drag', 'show'); clearTimeout(hideT); updateTip(); e.preventDefault();
+    });
+    thumb.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const m = metrics(), r = fs.getBoundingClientRect();
+      const ratio = Math.min(1, Math.max(0, (e.clientY - r.top - grab) / Math.max(1, m.trackH - m.th)));
+      messagesWrap.scrollTop = ratio * m.max;
+      updateTip();
+    });
+    const end = () => { if (!drag) return; drag = false; fs.classList.remove('drag'); armHide(); };
+    thumb.addEventListener('pointerup', end); thumb.addEventListener('pointercancel', end);
+    place();
+  })();
 
   async function teardownForSignOut() {
     if (!usersRef) return;
