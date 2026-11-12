@@ -1744,7 +1744,7 @@
       b.addEventListener('click', () => { t.remove(); if (onAction) onAction(); });
       t.appendChild(b);
     }
-    document.querySelector('.app').appendChild(t);
+    $('floatStack').appendChild(t);
     requestAnimationFrame(() => t.classList.add('show'));
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 7000);
   }

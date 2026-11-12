@@ -32,7 +32,7 @@
   const deb = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
   let auth, db, O = {}, user = null, profile = null, started = false, sid = '';
-  let verifyTimer = null, stopSess = null, cardS = null, suPhoto = null, acPhoto, resendAt = 0, stack = ['main'];
+  let lastClose = {}, verifyTimer = null, stopSess = null, cardS = null, suPhoto = null, acPhoto, resendAt = 0, stack = ['main'];
   const users = new Map();
   const overlay = $('authOverlay'), tabs = $('authTabs'), SP = $('settingsPanel');
   const hasPw = () => !!user && user.providerData.some((p) => p.providerId === 'password');
@@ -104,7 +104,7 @@
 
   // ---------------- auth state machine ----------------
   function start(o) {
-    O = o; db = o.db; auth = firebase.auth();
+    O = o; db = o.db; auth = firebase.auth(); auth.languageCode = 'ar';
     bindAuthUI(); bindSettings(); show('loading');
     auth.getRedirectResult().catch((e) => { show('login'); say(M(), errText(e), 'err'); });
     auth.onAuthStateChanged(handleUser);
@@ -131,6 +131,15 @@
       if (!profile) { prepSetup(); show('setup'); return; }
       finishReady(false);
     } catch (e) { console.warn(e); show('login'); say(M(), errText(e), 'err'); }
+  }
+  // Server-side mail first (api/send-verification, needs SMTP env vars); falls back to Firebase's own mail.
+  async function sendVerify() {
+    const u = auth.currentUser;
+    try {
+      const r = await fetch('/api/send-verification', { method: 'POST', headers: { Authorization: 'Bearer ' + (await u.getIdToken()) } });
+      if (r.ok) return;
+    } catch (e) {}
+    await u.sendEmailVerification();
   }
   async function checkVerified(manual) {
     const u = auth.currentUser; if (!u) return;
@@ -185,7 +194,7 @@
       if (!em) throw { message: 'أدخل البريد الإلكتروني' };
       if (pw.length < 8) throw { code: 'auth/weak-password' };
       const c = await auth.createUserWithEmailAndPassword(em, pw);
-      await c.user.sendEmailVerification();
+      await sendVerify();
       resendAt = Date.now() + 45000;
       say(M(), 'تم إرسال رسالة التحقق إلى ' + em + '. قد تستغرق دقائق، وتفقد مجلد الرسائل غير المرغوبة (Spam).', 'ok');
     });
@@ -199,7 +208,7 @@
       const l = Math.ceil((resendAt - Date.now()) / 1000);
       if (l > 0) return say(M(), 'انتظر ' + l + ' ثانية قبل إعادة الإرسال', 'err');
       run($('vResend'), async () => {
-        await auth.currentUser.sendEmailVerification(); resendAt = Date.now() + 45000;
+        await sendVerify(); resendAt = Date.now() + 45000;
         say(M(), 'تم إرسال رسالة التحقق. تفقد بريدك والرسائل غير المرغوبة.', 'ok');
       });
     };
@@ -331,16 +340,18 @@
   function go(n) {
     const cur = page(stack[stack.length - 1]), nx = page(n);
     cur.classList.remove('active'); cur.classList.add('behind'); nx.classList.remove('behind'); nx.classList.add('active');
-    stack.push(n); enter(n); setTitle(); nx.scrollTop = 0;
+    stack.push(n); history.pushState({ frs: stack.length }, ''); enter(n); setTitle(); nx.scrollTop = 0;
   }
-  function back() {
-    if (stack.length < 2) return closeSettings();
+  function back() { if (SP.classList.contains('open')) history.back(); }
+  function uiClose() { if (SP.classList.contains('open')) history.go(-stack.length); }
+  function popPage() {
+    if (stack.length < 2) return;
     const c = stack.pop(); leave(c); page(c).classList.remove('active');
     const p = page(stack[stack.length - 1]); p.classList.remove('behind'); p.classList.add('active'); setTitle();
   }
   function openSettings(n) {
-    if (!started) return;
-    stack = ['main']; SP.querySelectorAll('.set-page').forEach((p) => p.classList.remove('active', 'behind'));
+    if (!started || SP.classList.contains('open')) return;
+    stack = ['main']; history.pushState({ frs: 1 }, ''); SP.querySelectorAll('.set-page').forEach((p) => p.classList.remove('active', 'behind'));
     page('main').classList.add('active'); renderMe(); enter('main'); setTitle();
     SP.classList.add('open'); SP.setAttribute('aria-hidden', 'false');
     if (n && n !== 'main') setTimeout(() => go(n), 40);
@@ -398,7 +409,12 @@
 
   function bindSettings() {
     $('settingsFab').onclick = () => openSettings();
-    $('setBack').onclick = back; $('setClose').onclick = closeSettings;
+    $('setBack').onclick = back; $('setClose').onclick = uiClose;
+    window.addEventListener('popstate', (e) => {
+      if (!SP.classList.contains('open')) return;
+      const d = (e.state && e.state.frs) || 0;
+      if (d === 0) closeSettings(); else while (stack.length > d) popPage();
+    });
     SP.addEventListener('click', (e) => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (cardS) closeCard(); else if (SP.classList.contains('open')) back(); } });
     $('setLogout').onclick = async () => { if (await askConfirm({ title: 'تسجيل الخروج', desc: 'هل تريد تسجيل الخروج من هذا الجهاز؟', label: 'تسجيل الخروج' })) logout(); };
@@ -432,7 +448,10 @@
 
   // ---------------- floating profile card ----------------
   function openCard(uid, anchor, fb) {
-    if (!started || !uid) return; closeCard(true);
+    if (!started || !uid) return;
+    if (cardS && cardS.uid === uid) { closeCard(); return; }
+    if (lastClose.uid === uid && Date.now() - lastClose.t < 600) return;
+    closeCard(true);
     const layer = el('div', 'pc-layer'), c = el('div', 'pcard'); layer.appendChild(c); document.body.appendChild(layer);
     const ref = db.ref('chat/presence/' + uid);
     cardS = { uid, layer, c, fb, anchor, pres: null, ref };
@@ -470,7 +489,7 @@
     c.style.transformOrigin = (r.left + r.width / 2 - left) + 'px ' + (r.top + r.height / 2 - top) + 'px';
   }
   function closeCard(now) {
-    const s = cardS; if (!s) return; cardS = null;
+    const s = cardS; if (!s) return; cardS = null; lastClose = { uid: s.uid, t: Date.now() };
     s.ref.off('value', s.h); clearInterval(s.t);
     if (now) { s.layer.remove(); return; }
     s.layer.style.pointerEvents = 'none'; s.c.classList.remove('show'); setTimeout(() => s.layer.remove(), 260);
