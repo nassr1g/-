@@ -4,6 +4,39 @@
    app.js starts it with FRAuth.start({ db, onReady, onProfile,
    beforeSignOut, refresh }).
    ========================================================= */
+/* FRNav: back-button layers (online list -> profile card ...) + exit guard */
+window.FRNav = (() => {
+  const layers = []; let hook = null, exiting = false, pend = false;
+  window.addEventListener('popstate', (e) => {
+    pend = false;
+    const s = e.state || {};
+    if (s.frs) return; // settings panel manages its own pages
+    const d = s.frL || 0;
+    while (layers.length > d) { const l = layers.pop(); try { l.close(); } catch (er) {} }
+    if (s.frRoot && hook) {
+      if (exiting) { try { window.close(); } catch (er) {} setTimeout(() => history.back(), 0); return; }
+      history.pushState({ frGuard: 1 }, '');
+      hook();
+    }
+  });
+  return {
+    init(onRootBack) {
+      if (hook) return; hook = onRootBack;
+      const s = history.state || {};
+      if (s.frGuard) return;
+      if (s.frRoot) history.pushState({ frGuard: 1 }, '');
+      else { history.replaceState({ frRoot: 1 }, ''); history.pushState({ frGuard: 1 }, ''); }
+    },
+    push(name, close) { layers.push({ name, close }); history.pushState({ frL: layers.length }, ''); },
+    back(name) {
+      const t = layers[layers.length - 1];
+      if (pend || !t || t.name !== name) return;
+      pend = true; setTimeout(() => { pend = false; }, 700); history.back();
+    },
+    exit() { exiting = true; history.back(); }
+  };
+})();
+
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
@@ -141,7 +174,8 @@
     } catch (e) { return null; }
   }
   async function sendVerify() {
-    const r = await mail('verify', {}, true);
+    let r = await mail('verify', {}, true);
+    if (!(r && r.ok) && (!r || r.status >= 500)) { await new Promise((x) => setTimeout(x, 900)); r = await mail('verify', {}, true); }
     if (r && r.ok) return;
     await auth.currentUser.sendEmailVerification();
   }
@@ -424,7 +458,7 @@
       if (d === 0) closeSettings(); else while (stack.length > d) popPage();
     });
     SP.addEventListener('click', (e) => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (cardS) closeCard(); else if (SP.classList.contains('open')) back(); } });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (cardS) uiCloseCard(); else if (SP.classList.contains('open')) back(); } });
     $('setLogout').onclick = async () => { if (await askConfirm({ title: 'تسجيل الخروج', desc: 'هل تريد تسجيل الخروج من هذا الجهاز؟', label: 'تسجيل الخروج' })) logout(); };
     $('acPick').onclick = () => $('acFile').click();
     $('acFile').onchange = async (e) => {
@@ -459,18 +493,22 @@
   }
 
   // ---------------- floating profile card ----------------
+  function uiCloseCard() { if (cardS) FRNav.back('card'); }
   function openCard(uid, anchor, fb) {
     if (!started || !uid) return;
-    if (cardS && cardS.uid === uid) { closeCard(); return; }
+    if (cardS && cardS.uid === uid) { uiCloseCard(); return; }
     if (lastClose.uid === uid && Date.now() - lastClose.t < 600) return;
+    const had = !!cardS;
     closeCard(true);
     const layer = el('div', 'pc-layer'), c = el('div', 'pcard'); layer.appendChild(c); document.body.appendChild(layer);
     const ref = db.ref('chat/presence/' + uid);
     cardS = { uid, layer, c, fb, anchor, pres: null, ref };
-    layer.addEventListener('pointerdown', (e) => { if (e.target === layer) closeCard(); });
+    layer.addEventListener('pointerdown', (e) => { if (e.target === layer) uiCloseCard(); });
+    layer.addEventListener('click', (e) => e.stopPropagation());
     cardS.h = ref.on('value', (s) => { if (cardS) { cardS.pres = s.val(); renderCard(); } });
     cardS.t = setInterval(renderCard, 30000);
     renderCard(); requestAnimationFrame(() => requestAnimationFrame(() => c.classList.add('show')));
+    if (!had) FRNav.push('card', () => closeCard());
   }
   function renderCard() {
     const s = cardS; if (!s) return;
@@ -504,7 +542,7 @@
     const s = cardS; if (!s) return; cardS = null; lastClose = { uid: s.uid, t: Date.now() };
     s.ref.off('value', s.h); clearInterval(s.t);
     if (now) { s.layer.remove(); return; }
-    s.layer.style.pointerEvents = 'none'; s.c.classList.remove('show'); setTimeout(() => s.layer.remove(), 260);
+    s.c.classList.remove('show'); setTimeout(() => s.layer.remove(), 420); // layer stays briefly so the closing tap can't hit what's underneath
   }
 
   window.FRAuth = { start, users, nameOf, mkAvatar, openCard, openSettings };

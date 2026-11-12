@@ -317,10 +317,12 @@
   }
 
   onlineBtn.addEventListener('click', () => {
+    if (onlineSheetBackdrop.style.display === 'flex') return;
     onlineSheetBackdrop.style.display = 'flex';
+    FRNav.push('online', () => { onlineSheetBackdrop.style.display = 'none'; });
   });
   onlineSheetBackdrop.addEventListener('click', (e) => {
-    if (e.target === onlineSheetBackdrop) onlineSheetBackdrop.style.display = 'none';
+    if (e.target === onlineSheetBackdrop) FRNav.back('online');
   });
 
   // ========================================================
@@ -360,8 +362,14 @@
   });
 
   function autoGrow() {
+    const prev = messageInput.offsetHeight;
+    messageInput.style.transition = 'none';
     messageInput.style.height = 'auto';
-    messageInput.style.height = Math.min(messageInput.scrollHeight, 110) + 'px';
+    const full = messageInput.scrollHeight, target = Math.min(full, 110);
+    messageInput.style.overflowY = full > 110 ? 'auto' : 'hidden';
+    if (prev) { messageInput.style.height = prev + 'px'; void messageInput.offsetHeight; }
+    messageInput.style.transition = '';
+    messageInput.style.height = target + 'px';
     sendBtn.classList.toggle('empty', !messageInput.value.trim());
     updateComposerExpanded();
   }
@@ -370,6 +378,7 @@
   // Boot
   // ========================================================
   function bootChat(isFreshJoin) {
+    FRNav.init(() => { if (!closeTopSoft()) askExit(); });
     if (!firebaseReady) {
       showSystemError('لا يمكن الاتصال بقاعدة البيانات. تحقق من إعدادات Firebase.');
       return;
@@ -525,7 +534,28 @@
       jumpBottomBadge.style.display = 'none';
     }
   }
-  jumpBottomBtn.addEventListener('click', scrollToBottom);
+  let smoothRaf = null;
+  function cancelSmooth() { if (smoothRaf) { cancelAnimationFrame(smoothRaf); smoothRaf = null; } }
+  function smoothScrollToBottom() {
+    cancelSmooth();
+    unseenNewCount = 0; updateJumpBtn();
+    const from = messagesWrap.scrollTop;
+    const dist = messagesWrap.scrollHeight - messagesWrap.clientHeight - from;
+    if (dist < 4) return;
+    const dur = Math.min(1100, Math.max(420, 280 + Math.sqrt(dist) * 22));
+    const t0 = performance.now();
+    const ease = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const step = (now) => {
+      const t = Math.min(1, (now - t0) / dur);
+      const target = messagesWrap.scrollHeight - messagesWrap.clientHeight;
+      messagesWrap.scrollTop = from + (target - from) * ease(t);
+      if (t < 1) smoothRaf = requestAnimationFrame(step);
+      else { smoothRaf = null; messagesWrap.scrollTop = messagesWrap.scrollHeight; }
+    };
+    smoothRaf = requestAnimationFrame(step);
+  }
+  jumpBottomBtn.addEventListener('click', smoothScrollToBottom);
+  ['touchstart', 'wheel', 'pointerdown'].forEach((ev) => messagesWrap.addEventListener(ev, cancelSmooth, { passive: true }));
 
   // Stay pinned to the newest message when the chat area changes size
   // (keyboard opens, reply bar appears, banner closes) - but only if the
@@ -1284,9 +1314,7 @@
     focusAtPress = null;
     sendMessage(f === null ? undefined : f);
   });
-  messageInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  });
+  // Enter inserts a new line (default textarea behaviour); sending is done only with the send button.
 
   // ========================================================
   // Soft delete (own messages only)
@@ -2126,17 +2154,82 @@
     openActionSheet('حذف ' + keys.length + (keys.length === 1 ? ' رسالة' : ' رسائل'), '', actions);
   }
 
-  // Telegram-style disappearance: text turns to dust, bubble fades, then the row collapses
+  // Telegram-style disappearance: the whole bubble crumbles into dust (swept left->right), then the row collapses
   function dustVanish(row, done) {
-    const bubble = row.querySelector('.msg-bubble'), t = bubble && bubble.querySelector('.msg-text');
-    let d = 0;
-    if (t && t.textContent.trim() && !bubble.classList.contains('deleted')) d = dissolveText(t, row);
-    if (bubble) {
-      const w = Math.round(d * 0.45) + 'ms';
-      bubble.style.transition = 'opacity .4s ease ' + w + ', transform .5s ease ' + w;
-      bubble.style.opacity = '0'; bubble.style.transform = 'scale(.9) translateY(-4px)';
+    const bubble = row.querySelector('.msg-bubble');
+    if (!bubble) { done(); return; }
+    const rr = row.getBoundingClientRect(), br = bubble.getBoundingClientRect();
+    const M = 80, dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = Math.ceil(rr.width + M * 2), H = Math.ceil(rr.height + M * 2);
+    const cv = document.createElement('canvas');
+    cv.className = 'dust-canvas';
+    cv.width = W * dpr; cv.height = H * dpr;
+    cv.style.cssText = 'position:absolute;pointer-events:none;z-index:7;left:' + (-M) + 'px;top:' + (-M) + 'px;width:' + W + 'px;height:' + H + 'px;';
+    row.appendChild(cv);
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+    const pal = row.classList.contains('mine')
+      ? ['138,79,192', '107,63,168', '79,47,133', '170,120,225', '243,238,252']
+      : ['48,25,79', '29,18,48', '80,50,130', '155,89,182', '243,238,252'];
+    const bx = br.left - rr.left + M, by = br.top - rr.top + M, bw = br.width, bh = br.height;
+    const SWEEP = 760, LIFE = 760;
+    const n = Math.max(160, Math.min(900, Math.round(bw * bh / 12)));
+    const parts = [];
+    for (let i = 0; i < n; i++) {
+      const f = Math.random();
+      parts.push({
+        x: bx + f * bw, y: by + Math.random() * bh, c: pal[(Math.random() * pal.length) | 0],
+        s: 1.2 + Math.random() * 2.4, dx: 14 + Math.random() * 70, dy: -(8 + Math.random() * 60) + (Math.random() - .5) * 30,
+        d: ((f * 100 + 6) / 112) * SWEEP * .93 + Math.random() * 50
+      });
     }
-    setTimeout(done, d + 150);
+    row.querySelectorAll('.msg-sender,.reactions-row,.msg-avatar').forEach((e) => { e.style.transition = 'opacity .35s ease'; e.style.opacity = '0'; });
+    const t0 = performance.now(), total = SWEEP + LIFE + 60;
+    (function frame(now) {
+      const el = Math.max(0, now - t0);
+      const edge = (el / (SWEEP * .93)) * 112 - 12;
+      const m = 'linear-gradient(90deg, transparent ' + edge + '%, #000 ' + (edge + 12) + '%)';
+      bubble.style.webkitMaskImage = m; bubble.style.maskImage = m;
+      ctx.clearRect(0, 0, W, H);
+      for (let i = 0; i < parts.length; i++) {
+        const q = parts[i], t = (el - q.d) / LIFE;
+        if (t <= 0 || t >= 1) continue;
+        const e = 1 - (1 - t) * (1 - t);
+        ctx.globalAlpha = (1 - t * t) * .9;
+        ctx.fillStyle = 'rgb(' + q.c + ')';
+        ctx.fillRect(q.x + q.dx * e, q.y + q.dy * e, q.s, q.s);
+      }
+      if (el < total) requestAnimationFrame(frame);
+      else { bubble.style.opacity = '0'; cv.remove(); done(); }
+    })(t0);
+  }
+
+  // ---------- back button: close soft overlays first, otherwise ask before leaving ----------
+  function closeTopSoft() {
+    if (ctxMenuEl && ctxMenuEl.classList.contains('show')) { closeContextMenu(); return true; }
+    const dyn = document.body.querySelectorAll(':scope > .sheet-backdrop');
+    if (dyn.length) { dyn[dyn.length - 1].remove(); return true; }
+    if (notifSheetBackdrop.style.display === 'flex') { notifSheetBackdrop.style.display = 'none'; return true; }
+    if (selectMode) { exitSelect(); return true; }
+    if (emojiPanelOpen) { closeEmojiPanel(); return true; }
+    return false;
+  }
+  function askExit() {
+    const old = document.querySelector('.cm-back.exit-confirm');
+    if (old) { old.classList.remove('show'); setTimeout(() => old.remove(), 250); return; }
+    const b = document.createElement('div'); b.className = 'cm-back exit-confirm';
+    const c = document.createElement('div'); c.className = 'cm';
+    const h = document.createElement('h4'); h.textContent = 'الخروج من الموقع؟';
+    const p = document.createElement('p'); p.textContent = 'هل تريد الخروج من المحادثة؟';
+    const stay = document.createElement('button'); stay.className = 'abtn primary'; stay.textContent = 'البقاء في الموقع';
+    const out = document.createElement('button'); out.className = 'abtn ghost'; out.textContent = 'الخروج';
+    const close = () => { b.classList.remove('show'); setTimeout(() => b.remove(), 250); };
+    stay.addEventListener('click', close);
+    out.addEventListener('click', () => { close(); FRNav.exit(); });
+    b.addEventListener('pointerdown', (e) => { if (e.target === b) close(); });
+    c.appendChild(h); c.appendChild(p); c.appendChild(stay); c.appendChild(out); b.appendChild(c);
+    document.body.appendChild(b);
+    requestAnimationFrame(() => b.classList.add('show'));
   }
 
   async function teardownForSignOut() {

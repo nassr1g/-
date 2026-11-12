@@ -1236,3 +1236,6 @@ body.selecting .msg-row.selected .msg-bubble::before {
 .sheet-btn.cancel { align-items: center; background: transparent; }
 .sheet-btn:active { transform: scale(.98); }
 body.selecting .msg-bubble.deleted::before { display: none; }
+
+/* smooth composer growth */
+.composer-glass .composer-input { transition: height .26s cubic-bezier(.22,1,.36,1); overflow-y: hidden; }
