@@ -288,17 +288,19 @@
 
   function renderOnlineList(users) {
     onlineList.innerHTML = '';
-    const names = Object.values(users).map(u => u && u.name).filter(Boolean);
-    if (names.length === 0) {
+    const ids = Object.keys(users).filter((k) => users[k] && users[k].name);
+    if (!ids.length) {
       const empty = document.createElement('div');
       empty.className = 'sheet-empty';
       empty.textContent = 'لا يوجد أحد متصل الآن';
       onlineList.appendChild(empty);
       return;
     }
-    names.forEach(name => {
+    ids.forEach((uid) => {
+      const name = FRAuth.nameOf(uid, users[uid].name);
       const row = document.createElement('div');
       row.className = 'sheet-row';
+      row.style.cursor = 'pointer';
       const left = document.createElement('div');
       left.className = 'sheet-row-left';
       const dot = document.createElement('span');
@@ -306,8 +308,10 @@
       const nm = document.createElement('span');
       nm.textContent = name;
       left.appendChild(dot);
+      left.appendChild(FRAuth.mkAvatar(uid, name, 'sm'));
       left.appendChild(nm);
       row.appendChild(left);
+      row.addEventListener('click', () => FRAuth.openCard(uid, row, name));
       onlineList.appendChild(row);
     });
   }
@@ -489,13 +493,7 @@
     scrollToBottomIfNear(false);
   }
 
-  function showSystemError(text) {
-    const div = document.createElement('div');
-    div.className = 'error-msg';
-    div.textContent = text;
-    messagesList.appendChild(div);
-    scrollToBottomIfNear(false);
-  }
+  function showSystemError(text) { showToast(text, null, null, true); }
 
   function scrollToBottom() {
     requestAnimationFrame(() => { messagesWrap.scrollTop = messagesWrap.scrollHeight; });
@@ -561,7 +559,7 @@
   function formatTime(ts) {
     if (!ts) return '';
     const d = new Date(ts);
-    return d.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true });
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
   }
 
   function renderMessage(key, data, isNew, prepend) {
@@ -1068,17 +1066,17 @@
     list.appendChild(makeCtxItem(checkGlyphMenu(), 'تحديد', () => { enterSelect(key); closeContextMenu(); }));
 
     if (mine && !data.deleted) {
-      const editItem = makeCtxItem(editGlyphMenu(), 'تعديل الرسالة', () => {
+      list.appendChild(makeCtxItem(editGlyphMenu(), 'تعديل الرسالة', () => {
+        closeContextMenu();
+        if (!canEdit(key)) { showSystemError(EDIT_ERR); return; }
         startEdit(key, data);
+      }));
+    }
+    if (!data.deleted) {
+      list.appendChild(makeCtxItem(trashGlyphMenu(), 'حذف الرسالة', () => {
         closeContextMenu();
-      });
-      list.appendChild(editItem);
-
-      const deleteItem = makeCtxItem(trashGlyphMenu(), 'حذف الرسالة', () => {
-        deleteOwnMessage(key);
-        closeContextMenu();
-      }, true);
-      list.appendChild(deleteItem);
+        askDelete([key]);
+      }, true));
     }
 
     ctxMenuEl.appendChild(reactionsBar);
@@ -1188,6 +1186,7 @@
   // in a distinct "edit mode" so there's no separate UI to build.
   // ========================================================
   function startEdit(key, data) {
+    if (!canEdit(key)) { showSystemError(EDIT_ERR); return; }
     data = (allMessagesByKey.get(key) || {}).data || data;
     cancelReply();
     editingKey = key;
@@ -1233,6 +1232,7 @@
     if (editingKey) {
       const key = editingKey;
       cancelEdit();
+      if (!canEdit(key)) { restore(); showSystemError(EDIT_ERR); return; }
       db.ref(`chat/messages/${key}`).update({
         text,
         edited: true,
@@ -1730,11 +1730,11 @@
     }
   }
 
-  function showToast(text, actionLabel, onAction) {
+  function showToast(text, actionLabel, onAction, isErr) {
     const old = document.querySelector('.app-toast');
     if (old) old.remove();
     const t = document.createElement('div');
-    t.className = 'app-toast';
+    t.className = 'app-toast' + (isErr ? ' err' : '');
     const span = document.createElement('span');
     span.textContent = text;
     t.appendChild(span);
@@ -1746,7 +1746,7 @@
     }
     $('floatStack').appendChild(t);
     requestAnimationFrame(() => t.classList.add('show'));
-    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 7000);
+    setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, isErr ? 4500 : 7000);
   }
 
   // ---------- Local-only deletion: hide chosen messages / clear the whole history on this device ----------
@@ -1782,16 +1782,16 @@
     setTimeout(() => { row.remove(); scheduleRegroup(); }, 420);
   }
 
-  function dropMessageLocally(key) {
+  function dropMessageLocally(key, fancy) {
     const entry = allMessagesByKey.get(key);
     if (!entry) return;
     db.ref('chat/messages/' + key + '/react').off('value');
-    vanishRow(entry.el);
+    if (fancy) dustVanish(entry.el, () => vanishRow(entry.el)); else vanishRow(entry.el);
     allMessagesByKey.delete(key);
   }
 
   function hideLocally(keys) {
-    keys.forEach((k) => { hiddenKeys.add(k); dropMessageLocally(k); });
+    keys.forEach((k, i) => { hiddenKeys.add(k); setTimeout(() => dropMessageLocally(k, true), i * 70); });
     persistHidden();
   }
 
@@ -1800,12 +1800,17 @@
     allMessagesByKey.forEach((e) => { if ((e.data.timestamp || 0) > maxTs) maxTs = e.data.timestamp; });
     clearedBefore = maxTs;
     try { localStorage.setItem(LS_CLEAR_KEY, String(clearedBefore)); } catch (e) {}
-    [...allMessagesByKey.keys()].forEach((k) => dropMessageLocally(k));
+    const wr = messagesWrap.getBoundingClientRect(), vis = [];
+    [...allMessagesByKey.keys()].forEach((k) => {
+      const r = allMessagesByKey.get(k).el.getBoundingClientRect();
+      if (r.bottom > wr.top && r.top < wr.bottom) vis.push(k); else dropMessageLocally(k);
+    });
+    vis.reverse().forEach((k, i) => setTimeout(() => dropMessageLocally(k, true), i * 80));
     hasMoreHistory = false;
     loadMoreRow.style.display = 'none';
     unseenNewCount = 0;
     updateJumpBtn();
-    setTimeout(() => { if (!allMessagesByKey.size) welcomeCard.style.display = ''; }, 450);
+    setTimeout(() => { if (!allMessagesByKey.size) welcomeCard.style.display = ''; }, vis.length * 80 + 1200);
   }
 
   function openActionSheet(title, desc, actions) {
@@ -1865,20 +1870,7 @@
     if (!selected.size) exitSelect();
   }
   selectCancel.addEventListener('click', exitSelect);
-  selectDelete.addEventListener('click', () => {
-    const keys = [...selected];
-    if (!keys.length) return;
-    const allMine = keys.every((k) => { const e = allMessagesByKey.get(k); return e && e.data.senderUid === myUid && !e.data.deleted; });
-    const actions = [{
-      label: 'حذف عندي فقط', desc: 'تُحذف من جهازك ولا تتأثر المحادثة عند الآخرين',
-      onClick: () => { hideLocally(keys); exitSelect(); }
-    }];
-    if (allMine) actions.push({
-      label: 'حذف للجميع', desc: 'تظهر "تم حذف هذه الرسالة" عند الجميع', danger: true,
-      onClick: () => { keys.forEach(deleteOwnMessage); exitSelect(); }
-    });
-    openActionSheet('حذف ' + keys.length + (keys.length === 1 ? ' رسالة' : ' رسائل'), '', actions);
-  });
+  selectDelete.addEventListener('click', () => { const keys = [...selected]; if (keys.length) askDelete(keys, exitSelect); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && selectMode) exitSelect(); });
 
   function checkGlyphMenu() {
@@ -2115,8 +2107,37 @@
   }
   messagesList.addEventListener('click', (e) => {
     const a = e.target.closest('.msg-avatar');
-    if (a) { e.stopPropagation(); FRAuth.openCard(a.dataset.uid, a, a.dataset.name); }
+    if (a) { e.stopPropagation(); FRAuth.openCard(a.dataset.uid, a, a.dataset.name); return; }
+    const d = e.target.closest('.msg-bubble.deleted');
+    const row = d && d.closest('.msg-row');
+    if (row && !selectMode && row.dataset.key) {
+      openActionSheet('الرسالة المحذوفة', '', [{ label: 'حذف عندي فقط', desc: 'إزالة هذه الرسالة من جهازك', danger: true, onClick: () => hideLocally([row.dataset.key]) }]);
+    }
   });
+
+  const EDIT_ERR = 'لا يمكن تعديل رسالة مرّ عليها أكثر من نصف ساعة';
+  function canEdit(key) { const e = allMessagesByKey.get(key); return !!e && Date.now() - (Number(e.data.timestamp) || 0) <= 1800000; }
+
+  function askDelete(keys, after) {
+    const allMine = keys.every((k) => { const e = allMessagesByKey.get(k); return e && e.data.senderUid === myUid && !e.data.deleted; });
+    const done = () => { if (after) after(); };
+    const actions = [{ label: 'حذف عندي فقط', desc: 'تُحذف من جهازك ولا تتأثر المحادثة عند الآخرين', onClick: () => { hideLocally(keys); done(); } }];
+    if (allMine) actions.push({ label: 'حذف للجميع', desc: 'تظهر "تم حذف هذه الرسالة" عند الجميع', danger: true, onClick: () => { keys.forEach(deleteOwnMessage); done(); } });
+    openActionSheet('حذف ' + keys.length + (keys.length === 1 ? ' رسالة' : ' رسائل'), '', actions);
+  }
+
+  // Telegram-style disappearance: text turns to dust, bubble fades, then the row collapses
+  function dustVanish(row, done) {
+    const bubble = row.querySelector('.msg-bubble'), t = bubble && bubble.querySelector('.msg-text');
+    let d = 0;
+    if (t && t.textContent.trim() && !bubble.classList.contains('deleted')) d = dissolveText(t, row);
+    if (bubble) {
+      const w = Math.round(d * 0.45) + 'ms';
+      bubble.style.transition = 'opacity .4s ease ' + w + ', transform .5s ease ' + w;
+      bubble.style.opacity = '0'; bubble.style.transform = 'scale(.9) translateY(-4px)';
+    }
+    setTimeout(done, d + 150);
+  }
 
   async function teardownForSignOut() {
     if (!usersRef) return;

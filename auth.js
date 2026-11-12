@@ -133,13 +133,17 @@
     } catch (e) { console.warn(e); show('login'); say(M(), errText(e), 'err'); }
   }
   // Server-side mail first (api/send-verification, needs SMTP env vars); falls back to Firebase's own mail.
-  async function sendVerify() {
-    const u = auth.currentUser;
+  async function mail(type, body, authed) {
+    const h = { 'Content-Type': 'application/json' };
     try {
-      const r = await fetch('/api/send-verification', { method: 'POST', headers: { Authorization: 'Bearer ' + (await u.getIdToken()) } });
-      if (r.ok) return;
-    } catch (e) {}
-    await u.sendEmailVerification();
+      if (authed) h.Authorization = 'Bearer ' + (await auth.currentUser.getIdToken());
+      return await fetch('/api/send-verification', { method: 'POST', headers: h, body: JSON.stringify(Object.assign({ type }, body)) });
+    } catch (e) { return null; }
+  }
+  async function sendVerify() {
+    const r = await mail('verify', {}, true);
+    if (r && r.ok) return;
+    await auth.currentUser.sendEmailVerification();
   }
   async function checkVerified(manual) {
     const u = auth.currentUser; if (!u) return;
@@ -200,8 +204,12 @@
     });
     $('fgBtn').onclick = () => run($('fgBtn'), async () => {
       const em = $('fgEmail').value.trim(); if (!em) throw { message: 'أدخل بريدك الإلكتروني' };
-      await auth.sendPasswordResetEmail(em);
-      say(M(), 'إن كان البريد مسجّلًا فستصلك رسالة لإعادة تعيين كلمة المرور.', 'ok');
+      const r = await mail('reset', { email: em }, false);
+      if (r && r.status === 404) throw { message: 'هذا البريد غير مسجّل لدينا. تحقق من الكتابة أو أنشئ حسابًا جديدًا.' };
+      if (r && r.status === 409) throw { message: 'هذا الحساب مسجّل عبر Google ولا توجد له كلمة مرور. استخدم زر Google.' };
+      if (r && r.status === 429) throw { message: 'انتظر دقيقة ثم أعد المحاولة' };
+      if (!r || !r.ok) await auth.sendPasswordResetEmail(em);
+      say(M(), 'تم إرسال رابط إعادة التعيين إلى ' + em + '. تفقد الرسائل غير المرغوبة أيضًا.', 'ok');
     });
     $('vDone').onclick = () => run($('vDone'), () => checkVerified(true));
     $('vResend').onclick = () => {
@@ -291,10 +299,10 @@
 
   // ---------------- date helpers ----------------
   function fmtSeen(ts) {
-    const d = new Date(ts), n = new Date(), t = d.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const d = new Date(ts), n = new Date(), t = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime(), diff = Math.round((day(n) - day(d)) / 864e5);
     if (diff === 0) return 'اليوم ' + t; if (diff === 1) return 'أمس ' + t;
-    return d.toLocaleDateString('ar-SA', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' + t;
+    return d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' + t;
   }
   function fmtLeft(ms) { const h = Math.ceil(ms / 36e5); return h >= 24 ? Math.ceil(h / 24) + ' يوم' : h + ' ساعة'; }
 
@@ -429,7 +437,11 @@
     $('acSave').onclick = () => run($('acSave'), saveProfile, $('acMsg'));
     $('seEmailBtn').onclick = () => run($('seEmailBtn'), async () => {
       const ne = $('seNewEmail').value.trim(); if (!ne) throw { message: 'أدخل البريد الجديد' };
-      await reauth($('seEmailPw').value); await user.verifyBeforeUpdateEmail(ne);
+      await reauth($('seEmailPw').value);
+      const r = await mail('change-email', { newEmail: ne }, true);
+      if (r && r.status === 409) throw { message: 'هذا البريد مستخدم في حساب آخر' };
+      if (r && r.status === 429) throw { message: 'انتظر دقيقة ثم أعد المحاولة' };
+      if (!r || !r.ok) await user.verifyBeforeUpdateEmail(ne);
       say($('seEmailMsg'), 'أرسلنا رابط تأكيد إلى ' + ne + '. يتغير بريدك بعد الضغط عليه، وقد تحتاج إلى تسجيل الدخول مجددًا.', 'ok');
     }, $('seEmailMsg'));
     $('sePassBtn').onclick = () => run($('sePassBtn'), async () => {
@@ -473,7 +485,7 @@
       const rows = el('div', 'pc-rows');
       const row = (k, v) => { const r = el('div', 'pc-row'); r.appendChild(el('span', '', k)); r.appendChild(el('b', '', v)); rows.appendChild(r); };
       row('آخر ظهور', on ? 'الآن' : (p && p.lastSeen ? fmtSeen(p.lastSeen) : 'غير معروف'));
-      row('تاريخ الانضمام', u.joinedAt ? new Date(u.joinedAt).toLocaleDateString('ar-SA', { day: 'numeric', month: 'long', year: 'numeric' }) : '—');
+      row('تاريخ الانضمام', u.joinedAt ? new Date(u.joinedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—');
       c.appendChild(rows);
       if (u.bio) c.appendChild(el('div', 'pc-bio', u.bio));
     }

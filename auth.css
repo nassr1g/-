@@ -106,7 +106,7 @@
 .cm input { margin-bottom: 10px; text-align: left; } .cm .abtn { margin-top: 6px; }
 
 /* ---------- floating profile card ---------- */
-.pc-layer { position: fixed; inset: 0; z-index: 70; }
+.pc-layer { position: fixed; inset: 0; z-index: 100; }
 .pcard { position: fixed; width: min(300px, calc(100vw - 24px)); padding: 22px 18px 18px; border-radius: 30px; text-align: center; color: var(--text-1); display: flex; flex-direction: column; align-items: center; gap: 4px; background: linear-gradient(180deg, rgba(36,20,60,.5), rgba(8,4,16,.72)); -webkit-backdrop-filter: blur(22px) saturate(190%); backdrop-filter: blur(22px) saturate(190%); box-shadow: inset 0 1.5px 1px rgba(255,255,255,.45), inset 0 -10px 18px -8px rgba(95,241,224,.14), 0 24px 54px rgba(4,0,14,.65), 0 0 34px rgba(123,79,201,.22); opacity: 0; transform: scale(.35); transition: opacity .22s ease, transform .42s cubic-bezier(.34,1.45,.5,1); isolation: isolate; }
 .pcard.show { opacity: 1; transform: none; }
 .pcard::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; padding: 1.2px; pointer-events: none; background: conic-gradient(from var(--rim-angle), rgba(255,255,255,.9), rgba(95,241,224,.5) 70deg, rgba(123,79,201,.15) 140deg, rgba(239,111,201,.5) 215deg, rgba(123,79,201,.15) 290deg, rgba(255,255,255,.9)); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; animation: rimSpin 9s linear infinite; }
@@ -123,3 +123,9 @@
 .float-stack > * { pointer-events: auto; }
 .float-stack .notif-banner { border-radius: 18px; border: .5px solid rgba(255,255,255,.18); background: rgba(28,16,48,.78); -webkit-backdrop-filter: blur(16px) saturate(180%); backdrop-filter: blur(16px) saturate(180%); box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 10px 28px rgba(0,0,0,.45); }
 .float-stack .app-toast { position: relative; left: auto; right: auto; top: auto; }
+
+.avatar.sm { --s: 30px; margin-inline-end: 9px; }
+.msg-bubble.deleted { cursor: pointer; }
+.app-toast.err { border-color: rgba(255,107,127,.55); background: rgba(58,14,28,.86); color: #ffe3e9; }
+.float-stack .app-toast:not(.show) { transform: translateY(-30px) scale(.95); }
+.float-stack .app-toast { transition: opacity .35s ease, transform .5s cubic-bezier(.34,1.5,.5,1); }
