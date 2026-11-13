@@ -58,8 +58,8 @@
   const messagesWrap = $('messagesWrap');
   const messagesList = $('messagesList');
   const welcomeCard = $('welcomeCard');
-  const loadMoreRow = $('loadMoreRow');
-  const loadMoreBtn = $('loadMoreBtn');
+  const netBar = $('netBar');
+  const netBarText = $('netBarText');
   const jumpBottomBtn = $('jumpBottomBtn');
   const jumpBottomBadge = $('jumpBottomBadge');
 
@@ -135,6 +135,7 @@
   let ctxMenuResizeObserver = null;
   let unseenNewCount = 0;
   let editingKey = null; // key of the message currently being edited, or null
+  let myJoined = 0;      // server time when this account joined (decides which history it may read)
 
   // ========================================================
   // Identity (persistent, localStorage, survives refresh)
@@ -229,6 +230,7 @@
   // Header sequence: "connecting..." -> (once stably connected) Hi! -> Nice to see you -> site name.
   // If the connection drops later, "connecting..." takes the site name's place until it returns.
   const CONNECT_TEXT = 'جارِ الاتصال بالمحادثة...';
+  const OFFLINE_TEXT = 'بانتظار الشبكة...';
   let introStarted = false, introDone = false, brandMode = 'connecting';
   let connTimer = null, lostTimer = null;
 
@@ -261,28 +263,32 @@
     }
   }
   function onConnectionLost() {
-    if (introDone) swapBrand(CONNECT_TEXT, 'connecting');
+    if (introDone) swapBrand(navigator.onLine === false ? OFFLINE_TEXT : CONNECT_TEXT, 'connecting');
   }
 
   function updateConnectionUI() {
     clearTimeout(connTimer);
     clearTimeout(lostTimer);
+    if (window.FRNet) window.FRNet.connected = !!(isConnected && firebaseReady);
+    sendBtn.disabled = false; // writing is always possible: unsent messages wait in the outbox
     if (isConnected && firebaseReady) {
       statusDot.classList.remove('off');
-      sendBtn.disabled = false;
       connTimer = setTimeout(onStableConnection, 700); // only once the connection has held steady
     } else {
       statusDot.classList.add('off');
-      sendBtn.disabled = true;
       lostTimer = setTimeout(onConnectionLost, 1500);  // ignore tiny blips
     }
+    renderNetBar();
   }
 
   function setupPresence() {
     const connectedRef = db.ref('.info/connected');
+    db.ref('.info/serverTimeOffset').on('value', (s) => { serverOffset = Number(s.val()) || 0; });
     connectedRef.on('value', (snap) => {
       isConnected = !!snap.val();
+      window.FRNet.ready = true;
       updateConnectionUI();
+      if (isConnected) { retryDelay = 2000; startChangesFeed(); kickOutbox(); backfillSoon(); }
       if (isConnected && document.visibilityState === 'visible') announcePresence();
     });
 
@@ -399,10 +405,12 @@
     usersRef = db.ref('chat/presence');
     typingRef = db.ref('chat/typing');
     eventsRef = db.ref('chat/events');
+    changesRef = db.ref('chat/changes');
+    try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {} // ask the browser not to evict our data
 
     setupPresence();
     setupTyping();
-    startMessageSync();
+    bootMessages();
     listenForEvents();
     initNotifications();
 
@@ -418,77 +426,386 @@
   }
 
   // ========================================================
-  // Messages: ONE persistent subscription handles both the
-  // initial batch and every live update after it (real fix
-  // for "new messages only show after refresh").
+  // Offline-first messages
+  //  - IndexedDB (FRStore) is what the screen is drawn from.
+  //  - Firebase is asked only for what this device doesn't have:
+  //      * new messages                  -> one query "timestamp >= last cursor"
+  //      * edits / deletes / reactions   -> tiny "changes" feed (ids only), then 1 message read each
+  //      * older history                 -> pages, only when scrolling up / idle backfill
+  //  - Messages written offline wait in the outbox and are sent in order, once each.
   // ========================================================
-  function startMessageSync() {
-    // limitToLast(PAGE_SIZE) + child_added gives us:
-    //  1) an immediate synthetic child_added for each of the last
-    //     PAGE_SIZE existing messages (the "initial load")
-    //  2) a child_added fired instantly for every new message
-    //     pushed afterwards, for as long as this listener lives.
-    // Because it's the SAME subscription throughout, there is no
-    // window where "new" messages fall outside of what we're
-    // listening to - which was the root cause of the old bug.
-    const liveQuery = messagesRef.limitToLast(PAGE_SIZE);
+  const Store = window.FRStore;
+  const SV = () => firebase.database.ServerValue.TIMESTAMP;
+  const WINDOW = 60, INITIAL = 100, PAGE = 200;
+  const outbox = new Map();        // key -> unsent message (mirrored in IndexedDB)
+  const pendingKeys = new Set();
+  const lastEvt = new Map();
+  let changesRef = null;
+  let historyFrom = 0, historyReady = false, syncLive = false, historyComplete = false;
+  let scanOldest = null, loadingOlder = false;
+  let msgCursor = 0, chgCursor = 0, serverOffset = 0, cursorTimer = null;
+  let flushing = false, retryTimer = null, retryDelay = 2000, feedStarted = false, storageWarned = false, reactQuiet = false;
+  window.FRNet = { connected: false, ready: false, pending: () => outbox.size };
 
-    liveQuery.on('child_added', (snap) => {
-      const key = snap.key;
-      if (allMessagesByKey.has(key)) return;
-      loadedCount++;
-      const data = snap.val();
-      renderMessage(key, data, liveSyncStarted /* animate only once we're past the initial batch */);
-      if (oldestLoadedKey === null) oldestLoadedKey = key;
-      if (!allMessagesByKey.has(key)) return; // hidden on this device
-      // Always force-scroll for the initial batch and for my own just-sent
-      // messages; for incoming messages from others, only auto-scroll if
-      // the user is already near the bottom (otherwise show the jump button).
-      const isMine = data && data.senderUid === myUid;
-      scrollToBottomIfNear(!liveSyncStarted || isMine);
-      if (liveSyncStarted && !isMine) handleIncomingForSound(data);
-    });
-
-    liveQuery.on('child_changed', (snap) => {
-      const key = snap.key;
-      const data = snap.val();
-      updateExistingMessage(key, data);
-    });
-
-    // mark "initial batch done" right after the current queue of
-    // synchronous/microtask child_added events has flushed.
-    messagesRef.limitToLast(PAGE_SIZE).once('value', () => {
-      liveSyncStarted = true;
-      hasMoreHistory = loadedCount >= PAGE_SIZE;
-      loadMoreRow.style.display = hasMoreHistory ? 'flex' : 'none';
-      scrollToBottom();
-    });
+  const tmo = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ code: 'TIMEOUT' }), ms))]);
+  const serverNow = () => Date.now() + serverOffset;
+  const toRec = (k, d) => Object.assign({ k }, d);
+  const cmpTK = (at, ak, bt, bk) => ((at - bt) || (ak < bk ? -1 : ak > bk ? 1 : 0));
+  const OFFLINE_ERR = 'هذه العملية تتطلب اتصالًا بالإنترنت. اتصل ثم أعد المحاولة.';
+  function requireOnline(onFail) {
+    if (isConnected && firebaseReady) return true;
+    if (onFail) onFail();
+    showSystemError(OFFLINE_ERR);
+    return false;
   }
 
-  function loadOlderMessages() {
-    if (!hasMoreHistory || !oldestLoadedKey) return;
-    loadMoreBtn.classList.add('loading');
-    loadMoreBtn.textContent = 'جارٍ التحميل...';
+  // Accounts created from now on carry `hf` (server time of joining, enforced by the rules): they never see older messages.
+  // Older accounts have no `hf` -> 0 -> full history, exactly as before.
+  async function getHistoryFrom() { return myJoined || 0; }
 
-    messagesRef.orderByKey().endBefore(oldestLoadedKey).limitToLast(PAGE_SIZE).once('value', (snap) => {
-      const val = snap.val() || {};
-      const keys = Object.keys(val).sort((a, b) => (val[a].timestamp||0) - (val[b].timestamp||0));
+  async function bootMessages() {
+    // 1) paint from the device immediately — no network involved
+    const local = (await Store.recent(WINDOW)).reverse();
+    local.forEach((m) => renderMessage(m.k, m, false));
+    if (local.length) scanOldest = { ts: local[0].timestamp, k: local[0].k };
+    // 2) messages still waiting to be sent
+    (await Store.outboxAll()).forEach((r) => { outbox.set(r.k, r); pendingKeys.add(r.k); renderPending(r); });
+    scrollToBottom();
+    historyComplete = !!(await Store.getMeta('histDone'));
+    msgCursor = (await Store.getMeta('cursor')) || 0;
+    chgCursor = (await Store.getMeta('chgCursor')) || 0;
+    setTimeout(() => { if (!introStarted) onStableConnection(); }, 900);
+    renderNetBar();
+    messagesWrap.addEventListener('scroll', () => { if (messagesWrap.scrollTop < 400) loadOlder(); }, { passive: true });
+    setTimeout(() => { if (messagesWrap.scrollHeight <= messagesWrap.clientHeight + 200) loadOlder(); }, 500);
+    startRemoteSync();
+    kickOutbox();
+  }
 
-      const prevHeight = messagesWrap.scrollHeight;
-      keys.slice().reverse().forEach(key => renderMessage(key, val[key], false, true));
+  // ---------- remote -> device ----------
+  async function startRemoteSync() {
+    historyFrom = await getHistoryFrom();
+    historyReady = true;
+    const firstRun = !msgCursor;
+    let q = messagesRef.orderByChild('timestamp');
+    q = firstRun ? q.startAt(historyFrom).limitToLast(INITIAL) : q.startAt(Math.max(msgCursor, historyFrom));
+    q.on('child_added', queueRemote);
+    q.on('child_changed', queueRemote);
+    q.once('value', () => { syncLive = true; });
+    if (isConnected) startChangesFeed();
+  }
 
-      if (keys.length > 0) oldestLoadedKey = keys[0];
-      hasMoreHistory = keys.length === PAGE_SIZE;
-      loadMoreRow.style.display = hasMoreHistory ? 'flex' : 'none';
-      loadMoreBtn.classList.remove('loading');
-      loadMoreBtn.textContent = 'تحميل رسائل أقدم';
+  let remoteQ = [], remoteTimer = null;
+  function queueRemote(snap) {
+    const d = snap.val();
+    if (!d || !d.timestamp) return;
+    const k = snap.key;
+    if (pendingKeys.has(k)) return;            // my own unsent/in-flight message: confirmed by the outbox
+    lastEvt.set(k, Date.now());
+    if (lastEvt.size > 600) { const old = Date.now() - 20000; lastEvt.forEach((v, key) => { if (v < old) lastEvt.delete(key); }); }
+    remoteQ.push({ rec: toRec(k, d), live: syncLive });
+    if (!remoteTimer) remoteTimer = setTimeout(flushRemote, 40);
+  }
+  async function flushRemote() {
+    remoteTimer = null;
+    const batch = remoteQ; remoteQ = [];
+    if (!batch.length) return;
+    const res = await Store.upsertMany(batch.map((b) => b.rec));
+    res.forEach((r, i) => {
+      if (!r) return;
+      msgCursor = Math.max(msgCursor, Number(r.next.timestamp) || 0);
+      applyUpsert(r, batch[i].live);
+    });
+    persistCursors();
+    if (Store.failed && !storageWarned) {
+      storageWarned = true;
+      showToast('مساحة التخزين على الجهاز ممتلئة، لن تُحفظ الرسائل الجديدة محليًا لكنها تبقى في الخادم.', null, null, true, 6000);
+    }
+  }
+  function persistCursors() {
+    clearTimeout(cursorTimer);
+    cursorTimer = setTimeout(() => { Store.setMeta('cursor', msgCursor); Store.setMeta('chgCursor', chgCursor); }, 1200);
+  }
 
-      requestAnimationFrame(() => {
-        messagesWrap.scrollTop += (messagesWrap.scrollHeight - prevHeight);
-      });
+  function applyUpsert(r, live) {
+    const next = r.next, k = next.k;
+    const known = allMessagesByKey.get(k);
+    if (known) {
+      if (known.pending) { confirmPending(k, next); return; }
+      reactQuiet = !live;
+      updateExistingMessage(k, next);
+      updateReactionsUI(k, reactMap(next.react));
+      reactQuiet = false;
+      return;
+    }
+    if (scanOldest && cmpTK(Number(next.timestamp) || 0, k, scanOldest.ts, scanOldest.k) < 0) return; // older than what's on screen
+    renderMessage(k, next, live);
+    if (!allMessagesByKey.has(k)) return; // hidden on this device
+    const mine = next.senderUid === myUid;
+    scrollToBottomIfNear(!live || mine);
+    if (live && !mine) handleIncomingForSound(next);
+  }
+
+  // ---------- changes feed: edits / deletes / reactions that happened while we weren't looking ----------
+  function startChangesFeed() {
+    if (feedStarted || !historyReady || !firebaseReady) return;
+    feedStarted = true;
+    if (!chgCursor) chgCursor = serverNow() - 60000;
+    changesRef.orderByChild('ts').startAt(Math.max(chgCursor, historyFrom)).on('child_added', (s) => onChange(s.val()));
+  }
+  const chgQ = new Set(); let chgTimer = null;
+  function onChange(c) {
+    if (!c || !c.k) return;
+    if (c.ts > chgCursor) { chgCursor = c.ts; persistCursors(); }
+    if (c.by === myUid) return;                                                // my own changes are applied locally
+    if (lastEvt.has(c.k) && Date.now() - lastEvt.get(c.k) < 4000) return;     // already delivered live
+    chgQ.add(c.k);
+    if (!chgTimer) chgTimer = setTimeout(runChanges, 150);
+  }
+  async function runChanges() {
+    chgTimer = null;
+    const keys = Array.from(chgQ); chgQ.clear();
+    for (let i = 0; i < keys.length; i += 5) {
+      await Promise.all(keys.slice(i, i + 5).map(async (k) => {
+        if (!(await Store.get(k))) return;           // not on this device -> a later download will already include the change
+        try { const s = await tmo(messagesRef.child(k).once('value'), 15000); const d = s.val(); if (d) queueRemote({ key: k, val: () => d }); } catch (e) {}
+      }));
+    }
+  }
+
+  // ---------- older history (from the device first, then Firebase in pages) ----------
+  async function loadOlder() {
+    if (loadingOlder || !scanOldest) return;
+    loadingOlder = true;
+    try {
+      for (let n = 0; n < 6; n++) {
+        if (clearedBefore && scanOldest.ts <= clearedBefore) break;
+        let batch = await Store.before(scanOldest.ts, scanOldest.k, WINDOW);
+        if (!batch.length && !historyComplete) batch = await fetchOlderPage();
+        if (!batch.length) break;
+        const before = allMessagesByKey.size;
+        prependBatch(batch);
+        if (allMessagesByKey.size > before) break; // something visible was added
+      }
+    } finally { loadingOlder = false; }
+  }
+  function prependBatch(batch) { // batch: newest first
+    const prevH = messagesWrap.scrollHeight, prevTop = messagesWrap.scrollTop;
+    batch.forEach((m) => renderMessage(m.k, m, false, true));
+    const last = batch[batch.length - 1];
+    if (last && (!scanOldest || cmpTK(last.timestamp, last.k, scanOldest.ts, scanOldest.k) < 0)) scanOldest = { ts: last.timestamp, k: last.k };
+    requestAnimationFrame(() => { messagesWrap.scrollTop = prevTop + (messagesWrap.scrollHeight - prevH); });
+  }
+  async function fetchOlderPage() {
+    if (!isConnected || !firebaseReady || !historyReady) return [];
+    const oldest = await Store.oldest();
+    if (!oldest) return [];
+    let s;
+    try { s = await tmo(messagesRef.orderByChild('timestamp').startAt(historyFrom).endAt(oldest.timestamp).limitToLast(PAGE).once('value'), 20000); } catch (e) { return []; }
+    const recs = [];
+    s.forEach((c) => { const d = c.val(); if (d && d.timestamp) recs.push(toRec(c.key, d)); });
+    if (recs.length < PAGE) { historyComplete = true; Store.setMeta('histDone', true); }
+    const res = await Store.upsertMany(recs);
+    return res.map((r) => r.next).filter((m) => cmpTK(m.timestamp, m.k, oldest.timestamp, oldest.k) < 0).sort((a, b) => cmpTK(b.timestamp, b.k, a.timestamp, a.k));
+  }
+  let backfilling = false;
+  function backfillSoon() { if (!backfilling && !historyComplete) setTimeout(backfillLoop, 4000); }
+  async function backfillLoop() { // quietly completes the local copy of the history, one page at a time
+    if (backfilling) return;
+    backfilling = true;
+    try {
+      while (!historyComplete && isConnected && document.visibilityState === 'visible') {
+        const page = await fetchOlderPage();
+        if (!page.length) break;
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    } finally { backfilling = false; }
+  }
+  async function ensureRendered(key) { // for reply-quote jumps to messages above the rendered window
+    const m = await Store.get(key);
+    if (!m || !scanOldest) return false;
+    const asc = await Store.between(m.timestamp, scanOldest.ts, scanOldest.k, 1500);
+    if (asc.length) prependBatch(asc.reverse());
+    return allMessagesByKey.has(key);
+  }
+
+  // ---------- device -> Firebase: the outbox ----------
+  function pendingData(r) {
+    return { text: r.text, senderUid: r.senderUid, senderName: r.senderName, timestamp: r.created, replyTo: r.replyTo, pending: true, state: r.state };
+  }
+  function renderPending(r) { renderMessage(r.k, pendingData(r), true); }
+
+  async function queueMessage(text) {
+    const k = db.ref('chat/messages').push().key; // generated on the device: unique, time-ordered, works offline
+    const rec = { k, text, senderUid: myUid, senderName: myName, created: Date.now(), state: 'pending', tries: 0 };
+    if (activeReply) rec.replyTo = { key: activeReply.key, sender: activeReply.sender, text: activeReply.text.slice(0, 120) };
+    cancelReply();
+    outbox.set(k, rec); pendingKeys.add(k);
+    renderPending(rec);
+    scrollToBottom();
+    playSound('send');
+    sendBtn.classList.remove('pop');
+    void sendBtn.offsetWidth;
+    sendBtn.classList.add('pop');
+    if (navigator.vibrate) navigator.vibrate(30);
+    renderNetBar();
+    try { await Store.outboxPut(rec); } catch (e) {}
+    if (Store.failed && !storageWarned) { storageWarned = true; showToast('تعذر حفظ الرسالة على الجهاز، ستُرسل ما دمت داخل الموقع.', null, null, true, 5000); }
+    if (!isConnected) registerBgSync();
+    kickOutbox();
+  }
+
+  function nextPending() {
+    let best = null;
+    outbox.forEach((r) => { if (r.state === 'pending' && (!best || r.k < best.k)) best = r; });
+    return best;
+  }
+  function kickOutbox() { flushOutbox().catch(() => {}); }
+  async function flushOutbox() {
+    if (flushing) return;
+    flushing = true; renderNetBar();
+    try {
+      while (isConnected && firebaseReady) {
+        const rec = nextPending();
+        if (!rec) break;
+        const out = await sendOne(rec);
+        if (out === 'retry') { clearTimeout(retryTimer); retryTimer = setTimeout(kickOutbox, retryDelay); retryDelay = Math.min(retryDelay * 2, 30000); break; }
+      }
+    } finally { flushing = false; renderNetBar(); }
+  }
+  async function sendOne(rec) {
+    const ref = db.ref('chat/messages/' + rec.k);
+    try {
+      const payload = { text: rec.text, senderUid: rec.senderUid, senderName: rec.senderName, timestamp: SV() };
+      if (rec.replyTo) payload.replyTo = rec.replyTo;
+      await tmo(ref.set(payload), 15000);
+      const s = await tmo(ref.once('value'), 10000); // answered from the local cache
+      return await confirmSent(rec, s.val() || Object.assign({}, payload, { timestamp: serverNow() }));
+    } catch (e) {
+      if (e && e.code === 'PERMISSION_DENIED') {
+        // same key written twice is refused by the rules -> it may simply have been delivered earlier
+        let s = null;
+        try { s = await tmo(ref.once('value'), 10000); } catch (e2) { if (!(e2 && e2.code === 'PERMISSION_DENIED')) return 'retry'; }
+        if (s && s.exists()) return await confirmSent(rec, s.val());
+        rec.tries = (rec.tries || 0) + 1;
+        if (rec.tries >= 2) { markFailed(rec); return 'failed'; }
+        return 'retry';
+      }
+      return 'retry'; // timeout / network: try again later (never blindly re-posted: same key)
+    }
+  }
+  async function confirmSent(rec, data) {
+    const k = rec.k, full = toRec(k, data);
+    outbox.delete(k); pendingKeys.delete(k);
+    Store.outboxDel(k);
+    const r = await Store.upsertMany([full]);
+    confirmPending(k, (r[0] && r[0].next) || full);
+    notifyServer(k);
+    retryDelay = 2000;
+    renderNetBar();
+    return 'sent';
+  }
+  function markFailed(rec) {
+    rec.state = 'failed'; Store.outboxPut(rec);
+    const e = allMessagesByKey.get(rec.k);
+    if (e) { e.el.classList.add('failed'); setMetaState(e.el, true); }
+  }
+  function retryPending(k) {
+    const rec = outbox.get(k); if (!rec) return;
+    rec.state = 'pending'; rec.tries = 0; Store.outboxPut(rec);
+    const e = allMessagesByKey.get(k);
+    if (e) { e.el.classList.remove('failed'); setMetaState(e.el, false); }
+    kickOutbox();
+  }
+  function discardPending(k) {
+    outbox.delete(k); pendingKeys.delete(k); Store.outboxDel(k);
+    const e = allMessagesByKey.get(k);
+    if (e) { vanishRow(e.el); allMessagesByKey.delete(k); }
+    renderNetBar();
+  }
+  function openPendingSheet(k) {
+    const r = outbox.get(k); if (!r) return;
+    const acts = [];
+    if (r.state === 'failed') acts.push({ label: 'إعادة المحاولة', onClick: () => retryPending(k) });
+    acts.push({ label: 'إلغاء الإرسال', desc: 'حذف هذه الرسالة التي لم تُرسل', danger: true, onClick: () => discardPending(k) });
+    openActionSheet(r.state === 'failed' ? 'تعذر إرسال الرسالة' : 'الرسالة بانتظار الإرسال', r.state === 'failed' ? '' : 'ستُرسل تلقائيًا عند توفر الاتصال.', acts);
+  }
+
+  // the unsent row becomes a normal message: clock fades into the time, gestures attach
+  function confirmPending(k, data) {
+    const entry = allMessagesByKey.get(k);
+    if (!entry) { renderMessage(k, data, true); return; }
+    const row = entry.el;
+    entry.data = data; entry.pending = false;
+    row.classList.remove('pending', 'failed');
+    delete row.dataset.pend;
+    row.dataset.ts = data.timestamp || 0; row.dataset.sk = '0';
+    const meta = row.querySelector('.msg-meta');
+    if (meta) { meta.textContent = formatTime(data.timestamp); meta.classList.remove('state-in'); void meta.offsetWidth; meta.classList.add('state-in'); }
+    attachGestures(row, row.querySelector('.msg-bubble-shell'), row.querySelector('.reply-swipe-icon'), k, data, true);
+    const prev = row.previousElementSibling && row.previousElementSibling.classList.contains('msg-row') ? row.previousElementSibling : null;
+    const nxt = row.nextElementSibling && row.nextElementSibling.classList.contains('msg-row') ? row.nextElementSibling : null;
+    if ((prev && cmpRow(prev, row) > 0) || (nxt && cmpRow(row, nxt) > 0)) { row.remove(); placeRow(row, data, false); }
+    scheduleRegroup();
+  }
+
+  // background sending when the page is closed / offline
+  function registerBgSync() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then((reg) => reg.sync && reg.sync.register('fr-outbox')).catch(() => {});
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && outbox.size) registerBgSync(); });
+  window.addEventListener('pagehide', () => { if (outbox.size) registerBgSync(); });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', (e) => {
+    const m = e.data || {};
+    if (m.type === 'outbox-sent' && m.key && outbox.has(m.key)) confirmSent(outbox.get(m.key), m.data);
+  });
+  window.addEventListener('online', () => { renderNetBar(); kickOutbox(); });
+  window.addEventListener('offline', renderNetBar);
+
+  // ---------- writes that must reach the server: edit / delete / reaction (+ a changes-feed record) ----------
+  function writeChange(type, key, updates) {
+    const withFeed = Object.assign({}, updates);
+    withFeed['chat/changes/' + db.ref('chat/changes').push().key] = { k: key, t: type, ts: SV(), by: myUid };
+    return db.ref().update(withFeed).catch((e) => {
+      if (e && e.code === 'PERMISSION_DENIED') return db.ref().update(updates); // rules without the feed deployed yet
+      throw e;
     });
   }
-  loadMoreBtn.addEventListener('click', loadOlderMessages);
+  async function localPatch(key, fn) {
+    const entry = allMessagesByKey.get(key);
+    let rec = entry ? Object.assign({ k: key }, entry.data) : await Store.get(key);
+    if (!rec) return;
+    rec = fn(rec) || rec;
+    const r = await Store.upsertMany([rec]);
+    applyUpsert({ next: r[0] ? r[0].next : rec }, false);
+  }
+
+  // ---------- connection bar ----------
+  let netOffAt = 0, netTimer = null, wasOffline = false, restoredTimer = null;
+  function setNetBar(state, text) { netBar.dataset.state = state; if (text) netBarText.textContent = text; }
+  function renderNetBar() {
+    if (!netBar) return;
+    clearTimeout(netTimer);
+    const down = !(isConnected && firebaseReady);
+    if (down && !netOffAt) netOffAt = Date.now();
+    if (!down) netOffAt = 0;
+    const n = outbox.size;
+    if (down) {
+      const hard = navigator.onLine === false || Date.now() - netOffAt > 1200; // don't flash for tiny blips
+      if (!hard) { netTimer = setTimeout(renderNetBar, 1250 - (Date.now() - netOffAt)); return; }
+      wasOffline = true; clearTimeout(restoredTimer);
+      setNetBar('off', n ? 'غير متصل · ' + n + (n === 1 ? ' رسالة بانتظار الإرسال' : ' رسائل بانتظار الإرسال') : 'غير متصل · يمكنك قراءة الرسائل المحفوظة');
+      return;
+    }
+    if (n || flushing) { clearTimeout(restoredTimer); setNetBar('sync', n ? 'جارٍ إرسال ' + n + (n === 1 ? ' رسالة' : ' رسائل') + '...' : 'جارٍ المزامنة...'); return; }
+    if (wasOffline) {
+      wasOffline = false; setNetBar('ok', 'عاد الاتصال');
+      clearTimeout(restoredTimer); restoredTimer = setTimeout(() => { if (netBar.dataset.state === 'ok') setNetBar('', ''); }, 1800);
+      return;
+    }
+    if (netBar.dataset.state !== 'ok') setNetBar('', '');
+  }
 
   // ========================================================
   // System events (join notices) — broadcast to everyone live
@@ -625,6 +942,7 @@
     row.dataset.key = key;
     row.dataset.uid = data.senderUid || '';
     row.dataset.ts = data.timestamp || 0;
+    if (data.pending) { row.classList.add('pending'); row.dataset.pend = '1'; if (data.state === 'failed') row.classList.add('failed'); }
     if (isNew) row.classList.add('appear');
 
     const shell = document.createElement('div');
@@ -679,6 +997,7 @@
     const meta = document.createElement('div');
     meta.className = 'msg-meta';
     meta.textContent = formatTime(data.timestamp);
+    if (data.pending) meta.appendChild(stateGlyph(data.state === 'failed'));
     bubble.appendChild(meta);
 
     shell.appendChild(bubble);
@@ -695,28 +1014,50 @@
     swipeIcon.appendChild(replyGlyph());
     row.appendChild(swipeIcon);
 
-    if (!isDeleted) {
+    if (data.pending) {
+      // unsent: no swipe / menu until it is delivered (tap opens retry / cancel)
+    } else if (!isDeleted) {
       attachGestures(row, shell, swipeIcon, key, data, mine);
     } else {
       attachDeletedGestures(row, key);
     }
 
-    if (prepend) {
-      messagesList.insertBefore(row, messagesList.firstChild);
-    } else {
-      messagesList.appendChild(row);
-    }
-
-    allMessagesByKey.set(key, { data, el: row });
+    placeRow(row, data, prepend);
+    allMessagesByKey.set(key, { data, el: row, pending: !!data.pending });
     welcomeCard.style.display = 'none';
     scheduleRegroup();
+    if (!data.pending && (!scanOldest || cmpTK(Number(data.timestamp) || 0, key, scanOldest.ts, scanOldest.k) < 0)) scanOldest = { ts: Number(data.timestamp) || 0, k: key };
 
-    if (!isDeleted) {
-      db.ref(`chat/messages/${key}/react`).on('value', (snap) => {
-        updateReactionsUI(key, reactMap(snap.val()));
-      });
-      if (data.react) updateReactionsUI(key, reactMap(data.react));
+    if (!isDeleted && data.react) updateReactionsUI(key, reactMap(data.react));
+  }
+
+  // rows are kept in order: confirmed messages by (server time, key), unsent ones last
+  function cmpRow(a, b) {
+    const sa = a.dataset.sk || '0', sb = b.dataset.sk || '0';
+    return (sa > sb ? 1 : sa < sb ? -1 : 0) || ((Number(a.dataset.ts) || 0) - (Number(b.dataset.ts) || 0)) || (a.dataset.key < b.dataset.key ? -1 : a.dataset.key > b.dataset.key ? 1 : 0);
+  }
+  function placeRow(row, data, prepend) {
+    row.dataset.sk = data.pending ? '1' : '0';
+    if (prepend) { messagesList.insertBefore(row, messagesList.firstChild); return; }
+    let ref = null;
+    for (let el = messagesList.lastElementChild; el; el = el.previousElementSibling) {
+      if (!el.classList.contains('msg-row')) continue;
+      if (cmpRow(el, row) <= 0) break;
+      ref = el;
     }
+    messagesList.insertBefore(row, ref);
+  }
+  function stateGlyph(failed) {
+    const s = document.createElement('span'); s.className = 'st';
+    s.innerHTML = failed
+      ? '<svg viewBox="0 0 24 24" width="12" height="12"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 7v6M12 16.5v.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="12" height="12"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/><path class="hand" d="M12 7v5l3 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>';
+    return s;
+  }
+  function setMetaState(row, failed) {
+    const meta = row.querySelector('.msg-meta'); if (!meta) return;
+    const old = meta.querySelector('.st'); if (old) old.remove();
+    meta.appendChild(stateGlyph(failed));
   }
 
   // ---------- Ash / dust text effect (Telegram-style) ----------
@@ -864,7 +1205,6 @@
     if (wasDeleted) return;
 
     if (nowDeleted) {
-      db.ref(`chat/messages/${key}/react`).off('value');
       const row = entry.el;
       const bubble = row.querySelector('.msg-bubble');
       const reactionsRow = row.querySelector('.reactions-row');
@@ -940,7 +1280,8 @@
     return wrap;
   }
 
-  function jumpToMessage(key) {
+  async function jumpToMessage(key) {
+    if (!allMessagesByKey.has(key)) { if (!(await ensureRendered(key))) return; }
     const entry = allMessagesByKey.get(key);
     if (!entry) return;
     // Scroll ONLY the messages container (scrollIntoView also scrolls the page
@@ -1312,17 +1653,14 @@
     const keepFocus = (typeof focusAtPress === 'boolean') ? focusAtPress : document.activeElement === messageInput;
     const text = sanitizeMessage(messageInput.value).trim();
     if (!text) return;
-    if (!firebaseReady || !isConnected) {
-      showSystemError('لا يمكن إرسال الرسالة. تحقق من الاتصال بالإنترنت.');
-      return;
-    }
+    if (!firebaseReady) { showSystemError('تعذر تهيئة الاتصال، أعد فتح الموقع.'); return; }
+    if (editingKey && !requireOnline()) return; // editing needs the server: keep the text and the edit mode as they are
 
-    // Clear the composer the instant send is pressed (optimistic) and keep the
-    // keyboard open; if sending fails the text is put back.
+    // Clear the composer the instant send is pressed and keep the keyboard open.
     const restore = () => { if (!messageInput.value) { messageInput.value = text; autoGrow(); } };
     clearTimeout(typingDebounce);
     clearTimeout(typingTimeoutLocal);
-    typingRef.child(myUid).remove();
+    if (isConnected && typingRef) typingRef.child(myUid).remove();
     messageInput.value = '';
     autoGrow();
     if (keepFocus) messageInput.focus({ preventScroll: true });
@@ -1331,46 +1669,13 @@
       const key = editingKey;
       cancelEdit();
       if (!canEdit(key)) { restore(); showSystemError(EDIT_ERR); return; }
-      db.ref(`chat/messages/${key}`).update({
-        text,
-        edited: true,
-        editedAt: firebase.database.ServerValue.TIMESTAMP
-      }).catch((err) => {
-        console.error('edit error', err);
-        restore();
-        showSystemError('تعذر تعديل الرسالة');
-      });
+      const p = 'chat/messages/' + key + '/';
+      writeChange('e', key, { [p + 'text']: text, [p + 'edited']: true, [p + 'editedAt']: SV() })
+        .then(() => localPatch(key, (r) => Object.assign(r, { text, edited: true, editedAt: serverNow() })))
+        .catch((err) => { console.error('edit error', err); restore(); showSystemError('تعذر تعديل الرسالة'); });
       return;
     }
-
-    const payload = {
-      text,
-      senderUid: myUid,
-      senderName: myName,
-      timestamp: firebase.database.ServerValue.TIMESTAMP
-    };
-    if (activeReply) {
-      payload.replyTo = {
-        key: activeReply.key,
-        sender: activeReply.sender,
-        text: activeReply.text.slice(0, 120)
-      };
-    }
-    cancelReply();
-
-    const newRef = messagesRef.push(payload);
-    playSound('send');
-    sendBtn.classList.remove('pop');
-    void sendBtn.offsetWidth;
-    sendBtn.classList.add('pop');
-    if (navigator.vibrate) navigator.vibrate(30);
-    newRef.then(() => {
-      notifyServer(newRef.key);
-    }).catch((err) => {
-      console.error('send error', err);
-      restore();
-      showSystemError('فشل في إرسال الرسالة');
-    });
+    queueMessage(text); // shows at once as "sending", delivered in order, never twice
   }
   // Tapping the send button must not steal focus from the text box (keeps the keyboard open)
   // The send button never opens or closes the keyboard: it keeps focus where it was.
@@ -1393,14 +1698,12 @@
   // ========================================================
   function deleteOwnMessage(key) {
     const entry = allMessagesByKey.get(key);
-    if (!entry || entry.data.senderUid !== myUid) return;
-    db.ref(`chat/messages/${key}`).update({
-      deleted: true,
-      deletedAt: firebase.database.ServerValue.TIMESTAMP
-    }).catch(err => {
-      console.error('delete error', err);
-      showSystemError('تعذر حذف الرسالة');
-    });
+    if (!entry || entry.data.senderUid !== myUid || entry.pending) return;
+    if (!requireOnline()) return;
+    const p = 'chat/messages/' + key + '/';
+    writeChange('d', key, { [p + 'deleted']: true, [p + 'deletedAt']: SV() })
+      .then(() => localPatch(key, (r) => Object.assign(r, { deleted: true, deletedAt: serverNow() })))
+      .catch((err) => { console.error('delete error', err); showSystemError('تعذر حذف الرسالة'); });
   }
 
   // ========================================================
@@ -1423,15 +1726,21 @@
   }
 
   function toggleMyReaction(key, emoji) {
-    const ref = db.ref(`chat/messages/${key}/react/${myUid}`);
-    ref.once('value').then((snap) => {
-      const cur = snap.val();
-      if (cur && cur.emoji === emoji) return ref.remove();
-      return ref.set({ emoji, name: myName, ts: firebase.database.ServerValue.TIMESTAMP }).then(() => {
-        const e = allMessagesByKey.get(key);
-        if (e && e.data.senderUid !== myUid) notifyServer(key, 0, emoji);
+    if (!requireOnline()) return;
+    const entry = allMessagesByKey.get(key);
+    if (entry && entry.pending) return;
+    const cur = entry && entry.data.react && entry.data.react[myUid];
+    const off = !!cur && cur.emoji === emoji;
+    const path = 'chat/messages/' + key + '/react/' + myUid;
+    writeChange('r', key, { [path]: off ? null : { emoji, name: myName, ts: SV() } }).then(() => {
+      localPatch(key, (r) => {
+        const m = Object.assign({}, r.react || {});
+        if (off) delete m[myUid]; else m[myUid] = { emoji, name: myName, ts: serverNow() };
+        if (Object.keys(m).length) r.react = m; else delete r.react;
+        return r;
       });
-    }).catch((err) => console.error('reaction error', err));
+      if (!off && entry && entry.data.senderUid !== myUid) notifyServer(key, 0, emoji);
+    }).catch((err) => { console.error('reaction error', err); showSystemError('تعذر حفظ التفاعل'); });
   }
 
   function updateReactionsUI(key, reactions) {
@@ -1892,7 +2201,6 @@
   function dropMessageLocally(key, fancy) {
     const entry = allMessagesByKey.get(key);
     if (!entry) return;
-    db.ref('chat/messages/' + key + '/react').off('value');
     if (fancy) dustVanish(entry.el, () => vanishRow(entry.el)); else vanishRow(entry.el);
     allMessagesByKey.delete(key);
   }
@@ -1913,8 +2221,6 @@
       if (r.bottom > wr.top && r.top < wr.bottom) vis.push(k); else dropMessageLocally(k);
     });
     vis.reverse().forEach((k, i) => setTimeout(() => dropMessageLocally(k, true), i * 80));
-    hasMoreHistory = false;
-    loadMoreRow.style.display = 'none';
     unseenNewCount = 0;
     updateJumpBtn();
     setTimeout(() => { if (!allMessagesByKey.size) welcomeCard.style.display = ''; }, vis.length * 80 + 1200);
@@ -2050,7 +2356,7 @@
       Object.keys(reactions[em] || {}).forEach(uid => now.add(em + '|' + uid)));
     const prev = reactSeen.get(key);
     reactSeen.set(key, now);
-    if (!prev || entry.data.deleted) return; // first snapshot = baseline, no effects
+    if (!prev || entry.data.deleted || reactQuiet) return; // first snapshot = baseline, no effects
     now.forEach((id) => {
       if (prev.has(id)) return;
       const i = id.lastIndexOf('|');
@@ -2090,8 +2396,7 @@
     if (!data || !data.replyTo || !data.replyTo.key) return Promise.resolve(false);
     const entry = allMessagesByKey.get(data.replyTo.key);
     if (entry) return Promise.resolve(entry.data.senderUid === myUid);
-    return messagesRef.child(data.replyTo.key + '/senderUid').once('value')
-      .then(s => s.val() === myUid).catch(() => false);
+    return Store.get(data.replyTo.key).then((m) => !!m && m.senderUid === myUid).catch(() => false);
   }
 
   function handleIncomingForSound(data) {
@@ -2253,6 +2558,8 @@
   messagesList.addEventListener('click', (e) => {
     const a = e.target.closest('.msg-avatar');
     if (a) { e.stopPropagation(); FRAuth.openCard(a.dataset.uid, a, a.dataset.name); return; }
+    const pb = e.target.closest('.msg-row.pending .msg-bubble');
+    if (pb && !selectMode) { openPendingSheet(pb.closest('.msg-row').dataset.key); return; }
     const d = e.target.closest('.msg-bubble.deleted');
     const row = d && d.closest('.msg-row');
     if (row && row._lp) { row._lp = false; return; }
@@ -2394,6 +2701,7 @@
   })();
 
   async function teardownForSignOut() {
+    try { localStorage.removeItem(LS_DRAFT_KEY + myUid); } catch (e) {}
     if (!usersRef) return;
     try { await usersRef.child(myUid).set(presenceOffline()); } catch (e) {}
     try { usersRef.child(myUid).onDisconnect().cancel(); typingRef.child(myUid).onDisconnect().cancel(); typingRef.child(myUid).remove(); } catch (e) {}
@@ -2407,6 +2715,7 @@
   // Init
   // ========================================================
   function init() {
+    registerServiceWorker(); // offline shell + background sending: register as early as possible
     loadMuteMode();
     loadLocalPrefs();
     brandIntroText.textContent = CONNECT_TEXT;
@@ -2418,13 +2727,14 @@
     if (!firebaseReady) { bootChat(false); return; }
     FRAuth.start({
       db,
-      onReady: (p, isNew) => { myUid = p.uid; myName = p.displayName; bootChat(isNew); },
+      onReady: (p, isNew) => { myUid = p.uid; myName = p.displayName; myJoined = Number(p.hf) || 0; bootChat(isNew); },
       onProfile: (p) => {
         myName = p.displayName;
         if (pushToken && db) db.ref('chat/push/' + pushToken).update({ name: myName }).catch(() => {});
         if (usersRef && isConnected && document.visibilityState === 'visible') announcePresence();
       },
       beforeSignOut: teardownForSignOut,
+      toast: showSystemError,
       refresh: () => updateNotifUI()
     });
   }

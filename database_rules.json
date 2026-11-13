@@ -4,11 +4,12 @@
     ".write": false,
     "chat": {
       "messages": {
-        ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists()",
+        ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists() && (!root.child('users/'+auth.uid+'/hf').exists() || (query.orderByChild === 'timestamp' && query.startAt >= root.child('users/'+auth.uid+'/hf').val()))",
         ".indexOn": [
           "timestamp"
         ],
         "$messageId": {
+          ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists() && (!root.child('users/'+auth.uid+'/hf').exists() || data.child('timestamp').val() >= root.child('users/'+auth.uid+'/hf').val())",
           ".write": "(auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists()) && ((!data.exists() && newData.child('senderUid').val() === auth.uid) || (data.child('senderUid').val() === auth.uid && ((data.exists() && !data.child('deleted').exists() && newData.hasChildren(['deleted','deletedAt']) && newData.child('text').val() === data.child('text').val() && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val()) || (data.exists() && !data.child('deleted').exists() && newData.hasChildren(['edited','editedAt']) && now - data.child('timestamp').val() <= 1800000 && newData.child('editedAt').val() === now && newData.child('senderUid').val() === data.child('senderUid').val() && newData.child('senderName').val() === data.child('senderName').val() && newData.child('timestamp').val() === data.child('timestamp').val()))))",
           ".validate": "newData.hasChildren(['text','senderUid','senderName','timestamp'])",
           "text": {
@@ -71,6 +72,31 @@
                 ".validate": false
               }
             }
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "changes": {
+        ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists() && (!root.child('users/'+auth.uid+'/hf').exists() || (query.orderByChild === 'ts' && query.startAt >= root.child('users/'+auth.uid+'/hf').val()))",
+        ".indexOn": [
+          "ts"
+        ],
+        "$cid": {
+          ".write": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists() && !data.exists() && newData.exists()",
+          ".validate": "newData.hasChildren(['k','t','ts','by']) && newData.child('by').val() === auth.uid && (newData.child('t').val() === 'd' || newData.child('t').val() === 'e' || newData.child('t').val() === 'r')",
+          "k": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+          },
+          "t": {
+            ".validate": "newData.isString()"
+          },
+          "ts": {
+            ".validate": "newData.val() === now"
+          },
+          "by": {
+            ".validate": "newData.isString() && newData.val().length <= 100"
           },
           "$other": {
             ".validate": false
@@ -167,7 +193,7 @@
       ".read": "auth != null && auth.token.email_verified === true",
       "$uid": {
         ".write": "auth != null && auth.token.email_verified === true && auth.uid === $uid",
-        ".validate": "newData.hasChildren(['displayName','username','usernameLower','joinedAt'])",
+        ".validate": "newData.hasChildren(['displayName','username','usernameLower','joinedAt']) && (data.exists() || newData.child('hf').exists()) && (!data.child('hf').exists() || newData.child('hf').val() === data.child('hf').val())",
         "displayName": {
           ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 20"
         },
@@ -189,10 +215,19 @@
         "photo": {
           ".validate": "newData.isString() && newData.val().length <= 40000 && newData.val().beginsWith('data:image/')"
         },
+        "updatedAt": {
+          ".validate": "newData.val() === now || (data.exists() && newData.val() === data.val())"
+        },
+        "hf": {
+          ".validate": "newData.val() === now || (data.exists() && newData.val() === data.val())"
+        },
         "$other": {
           ".validate": false
         }
-      }
+      },
+      ".indexOn": [
+        "updatedAt"
+      ]
     },
     "usernames": {
       "$name": {

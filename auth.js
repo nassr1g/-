@@ -73,6 +73,13 @@ window.FRNav = (() => {
     'auth/account-exists-with-different-credential': 'هذا البريد مرتبط بطريقة دخول أخرى'
   };
   const errText = (e) => (e && ERR[e.code]) || (e && e.message) || 'حدث خطأ غير متوقع';
+  const ST = window.FRStore;
+  // ---- offline handling: anything that needs the server says so clearly (inputs are kept) ----
+  const OFFLINE_MSG = 'هذه العملية تتطلب اتصالًا بالإنترنت. اتصل ثم أعد المحاولة (ما كتبته محفوظ).';
+  const isOnline = () => navigator.onLine !== false && !(window.FRNet && window.FRNet.ready && window.FRNet.connected === false);
+  const needNet = () => { if (!isOnline()) throw { message: OFFLINE_MSG }; };
+  const tmo = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej({ message: 'انتهت مهلة الاتصال. تحقق من الإنترنت ثم أعد المحاولة.' }), ms || 15000))]);
+  const toast = (m) => { if (O && O.toast) O.toast(m); else alert(m); };
   const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
   const clean = (s) => String(s || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim();
   const deb = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
@@ -134,17 +141,40 @@ window.FRNav = (() => {
   }
 
   // ---------------- users cache (profiles) ----------------
-  function watchUsers() {
+  async function loadCachedUsers() {
+    const list = await ST.getUsers();
+    list.forEach((u) => { const v = Object.assign({}, u); delete v.uid; users.set(u.uid, v); });
+  }
+  // Profiles are cached on the device. After the first download only profiles changed since the last
+  // sync are fetched (updatedAt); a full refresh happens once a day to catch deleted accounts.
+  async function watchUsers() {
     const r = db.ref('users');
-    const upd = (s) => { users.set(s.key, s.val()); refreshDom(s.key); };
-    r.on('child_added', upd); r.on('child_changed', upd);
-    r.on('child_removed', (s) => { users.delete(s.key); refreshDom(s.key); });
+    const cursor = (await ST.getMeta('usersCursor')) || 0, fullAt = (await ST.getMeta('usersFullAt')) || 0;
+    const full = !cursor || !users.size || Date.now() - fullAt > 864e5;
+    let maxC = cursor, timer = null; const dirty = new Map();
+    const flush = () => { timer = null; const arr = []; dirty.forEach((v, uid) => arr.push(Object.assign({ uid }, v))); dirty.clear(); ST.putUsers(arr); ST.setMeta('usersCursor', maxC); };
+    const upd = (s) => {
+      const v = s.val(); users.set(s.key, v); refreshDom(s.key);
+      if (v) { maxC = Math.max(maxC, v.updatedAt || v.joinedAt || 0); dirty.set(s.key, v); if (!timer) timer = setTimeout(flush, 800); }
+    };
+    const q = full ? r : r.orderByChild('updatedAt').startAt(cursor);
+    q.on('child_added', upd); q.on('child_changed', upd);
+    if (full) {
+      r.on('child_removed', (s) => { users.delete(s.key); refreshDom(s.key); ST.delUsers([s.key]); });
+      r.once('value').then((s) => {
+        const keep = new Set(); s.forEach((c) => { keep.add(c.key); });
+        const gone = []; users.forEach((_, uid) => { if (!keep.has(uid)) gone.push(uid); });
+        gone.forEach((uid) => { users.delete(uid); refreshDom(uid); });
+        if (gone.length) ST.delUsers(gone);
+        ST.setMeta('usersFullAt', Date.now());
+      }).catch(() => {});
+    }
   }
   function refreshDom(uid) {
     const u = users.get(uid);
     document.querySelectorAll('.avatar[data-uid="' + uid + '"]').forEach((a) => paintAvatar(a, u, a.dataset.name));
     document.querySelectorAll('.msg-sender[data-uid="' + uid + '"]').forEach((n) => { n.textContent = nameOf(uid, n.dataset.fb); });
-    if (user && uid === user.uid && u) { profile = Object.assign({}, u, { uid }); renderMe(); if (O.onProfile) O.onProfile(profile); }
+    if (user && uid === user.uid && u) { profile = Object.assign({}, u, { uid }); ST.setMeta('profile', profile); renderMe(); if (O.onProfile) O.onProfile(profile); }
     if (cardS && cardS.uid === uid) renderCard();
   }
 
@@ -154,11 +184,14 @@ window.FRNav = (() => {
     bindAuthUI(); bindSettings(); show('loading');
     auth.getRedirectResult().catch((e) => { show('login'); say(M(), errText(e), 'err'); });
     auth.onAuthStateChanged(handleUser);
+    auth.onIdTokenChanged(() => { if (started && user) saveSession(); });
+    window.addEventListener('online', () => { if (!started && auth.currentUser) handleUser(auth.currentUser); });
   }
   async function handleUser(u) {
     if (started) { if (!u) location.reload(); return; }
     clearInterval(verifyTimer); user = u;
     if (!u) {
+      try { await ST.wipe(); } catch (e) {} // nobody is signed in: no private data may stay on the device
       show('login');
       const n = sessionStorage.getItem('fr_note');
       if (n) { sessionStorage.removeItem('fr_note'); say(M(), n, 'err'); }
@@ -169,14 +202,33 @@ window.FRNav = (() => {
       verifyTimer = setInterval(() => checkVerified(false), 5000); return;
     }
     show('loading');
+    try { await ST.ensureOwner(u.uid); } catch (e) {}   // another account used this device before -> its data is dropped
+    // Offline-first: a profile saved on this device opens the chat immediately, with or without internet.
+    const cached = await ST.getMeta('profile');
+    if (cached && cached.uid === u.uid) {
+      profile = cached; finishReady(false);
+      u.getIdTokenResult().then((tr) => { if (!tr.claims.email_verified) return u.getIdToken(true); }).catch(() => {});
+      return;
+    }
     try {
-      const tr = await u.getIdTokenResult();
+      const tr = await tmo(u.getIdTokenResult(), 20000);
       if (!tr.claims.email_verified) await u.getIdToken(true);
-      const s = await db.ref('users/' + u.uid).once('value');
+      const s = await tmo(db.ref('users/' + u.uid).once('value'), 20000);
       profile = s.val();
       if (!profile) { prepSetup(); show('setup'); return; }
       finishReady(false);
-    } catch (e) { console.warn(e); show('login'); say(M(), errText(e), 'err'); }
+    } catch (e) {
+      console.warn(e); show('login');
+      say(M(), isOnline() ? errText(e) : 'لا يوجد اتصال بالإنترنت. يلزم الاتصال مرة واحدة على الأقل لتسجيل الدخول على هذا الجهاز، وسيُكمل الموقع تلقائيًا عند عودته.', 'err');
+    }
+  }
+  // what the offline start and the background sender need to know about this account
+  function saveSession() {
+    try {
+      ST.setMeta('profile', profile);
+      const o = firebase.app().options;
+      ST.setMeta('auth', { uid: user.uid, refreshToken: user.refreshToken, apiKey: o.apiKey, dbUrl: o.databaseURL });
+    } catch (e) {}
   }
   // Server-side mail first (api/send-verification, needs SMTP env vars); falls back to Firebase's own mail.
   async function mail(type, body, authed) {
@@ -202,12 +254,17 @@ window.FRNav = (() => {
     if (started) return;
     started = true; profile.uid = user.uid;
     overlay.classList.add('hide'); setTimeout(() => { overlay.style.display = 'none'; }, 520);
-    watchUsers(); initSession(); renderMe();
-    O.onReady(profile, isNew);
+    saveSession();
+    (async () => {
+      try { await loadCachedUsers(); } catch (e) {}   // names / avatars are available before any network answer
+      watchUsers(); initSession(); renderMe();
+      O.onReady(profile, isNew);
+    })();
   }
   async function logout(note) {
     try { if (started && O.beforeSignOut) await O.beforeSignOut(); } catch (e) {}
-    try { if (started && sid) await db.ref('sessions/' + user.uid + '/' + sid).remove(); } catch (e) {}
+    try { if (started && sid) await tmo(db.ref('sessions/' + user.uid + '/' + sid).remove(), 6000); } catch (e) {}
+    try { await ST.wipe(); } catch (e) {}   // private data never stays on the device after sign-out
     try { localStorage.removeItem(LS_SID); if (note) sessionStorage.setItem('fr_note', note); } catch (e) {}
     await auth.signOut();
   }
@@ -286,16 +343,17 @@ window.FRNav = (() => {
     if (!UN_RE.test(v)) { setHint(hint, '3–20 حرفًا: إنجليزية وأرقام و _ فقط', 'err'); return false; }
     if (l === cur) { setHint(hint, ''); return true; }
     try {
-      const s = await db.ref('usernames/' + l).once('value');
+      const s = await tmo(db.ref('usernames/' + l).once('value'), 8000);
       if (s.exists()) { setHint(hint, 'اسم المستخدم محجوز', 'err'); return false; }
       setHint(hint, 'متاح', 'ok'); return true;
-    } catch (e) { setHint(hint, 'تعذر التحقق الآن', 'err'); return false; }
+    } catch (e) { setHint(hint, isOnline() ? 'تعذر التحقق الآن' : 'يتطلب اتصالًا بالإنترنت', 'err'); return false; }
   }
   async function createProfile() {
+    needNet();
     const dn = clean($('suName').value), un = $('suUser').value.trim(), bio = clean($('suBio').value).slice(0, 160);
     if (dn.length < 2) throw { message: 'الاسم الظاهر حرفان على الأقل' };
     if (!(await checkUN(un, $('suHint'), ''))) throw { message: 'اختر اسم مستخدم صالحًا ومتاحًا' };
-    const l = un.toLowerCase(), data = { displayName: dn, username: un, usernameLower: l, joinedAt: TS() };
+    const l = un.toLowerCase(), data = { displayName: dn, username: un, usernameLower: l, joinedAt: TS(), updatedAt: TS(), hf: TS() }; // hf = server time of joining: this account can never read older messages
     if (bio) data.bio = bio; if (suPhoto) data.photo = suPhoto;
     try { await db.ref().update({ ['usernames/' + l]: user.uid, ['users/' + user.uid]: data }); }
     catch (e) { throw e.code === 'PERMISSION_DENIED' ? { message: 'اسم المستخدم محجوز أو الحساب غير مؤهل بعد. جرّب اسمًا آخر.' } : e; }
@@ -323,6 +381,7 @@ window.FRNav = (() => {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') ref.update({ lastActive: TS() }).catch(() => {}); });
   }
   function watchSess() {
+    if (!isOnline()) { const l = $('sessList'); l.textContent = ''; l.appendChild(el('p', 'set-note', 'عرض الأجهزة وإنهاء الجلسات يتطلبان اتصالًا بالإنترنت.')); }
     const r = db.ref('sessions/' + user.uid), h = r.on('value', (s) => renderSess(s.val() || {}));
     stopSess = () => r.off('value', h);
   }
@@ -336,7 +395,7 @@ window.FRNav = (() => {
       row.appendChild(inf);
       if (!cur && !x.revoked) {
         const b = el('button', 'chipbtn danger', 'إنهاء');
-        b.onclick = () => db.ref('sessions/' + user.uid + '/' + x.k + '/revoked').set(true);
+        b.onclick = () => { if (!isOnline()) return toast(OFFLINE_MSG); db.ref('sessions/' + user.uid + '/' + x.k + '/revoked').set(true); };
         row.appendChild(b);
       }
       list.appendChild(row);
@@ -424,6 +483,7 @@ window.FRNav = (() => {
     say($('acMsg'), '');
   }
   async function saveProfile() {
+    needNet();
     const dn = clean($('acName').value), un = $('acUser').value.trim(), bio = clean($('acBio').value).slice(0, 160), b = 'users/' + user.uid + '/', up = {};
     if (dn.length < 2) throw { message: 'الاسم الظاهر حرفان على الأقل' };
     if (dn !== profile.displayName) up[b + 'displayName'] = dn;
@@ -439,7 +499,8 @@ window.FRNav = (() => {
       up[b + 'username'] = un;
     }
     if (!Object.keys(up).length) return say($('acMsg'), 'لا توجد تغييرات لحفظها', '');
-    try { await db.ref().update(up); }
+    up[b + 'updatedAt'] = TS();
+    try { await tmo(db.ref().update(up)); }
     catch (e) { throw e.code === 'PERMISSION_DENIED' ? { message: 'تعذر الحفظ: اسم المستخدم محجوز أو لم تمض 7 أيام على آخر تغيير' } : e; }
     fillAccount(); say($('acMsg'), 'تم حفظ التغييرات', 'ok');
   }
@@ -450,6 +511,7 @@ window.FRNav = (() => {
     say($('seEmailMsg'), ''); say($('sePassMsg'), '');
   }
   async function deleteAccount() {
+    needNet();
     const r = await askConfirm({ title: 'حذف الحساب نهائيًا', desc: 'سيُحذف ملفك الشخصي وصورتك وجلساتك واسم المستخدم، ولا يمكن التراجع. رسائلك السابقة تبقى في المحادثة دون ربطها بحساب.', password: hasPw(), type: profile.username, label: 'حذف حسابي نهائيًا', danger: true });
     if (!r) return;
     const m = $('seDelMsg'); say(m, '');
@@ -474,7 +536,11 @@ window.FRNav = (() => {
     });
     SP.addEventListener('click', (e) => { const g = e.target.closest('[data-go]'); if (g) go(g.dataset.go); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (cardS) uiCloseCard(); else if (SP.classList.contains('open')) back(); } });
-    $('setLogout').onclick = async () => { if (await askConfirm({ title: 'تسجيل الخروج', desc: 'هل تريد تسجيل الخروج من هذا الجهاز؟', label: 'تسجيل الخروج' })) logout(); };
+    $('setLogout').onclick = async () => {
+      if (!isOnline()) return toast('تسجيل الخروج يتطلب اتصالًا بالإنترنت (لإنهاء الجلسة وإيقاف الإشعارات على الخادم).');
+      const n = window.FRNet ? window.FRNet.pending() : 0;
+      if (await askConfirm({ title: 'تسجيل الخروج', desc: 'هل تريد تسجيل الخروج من هذا الجهاز؟' + (n ? ' لديك ' + n + (n === 1 ? ' رسالة لم تُرسل' : ' رسائل لم تُرسل') + ' وستُحذف.' : '') + ' ستُمسح بيانات المحادثة المحفوظة على هذا الجهاز.', label: 'تسجيل الخروج' })) logout();
+    };
     $('acPick').onclick = () => $('acFile').click();
     $('acFile').onchange = async (e) => {
       try { acPhoto = await readPhoto(e.target.files[0]); paintAvatar($('acAv'), { photo: acPhoto }, $('acName').value); }
@@ -485,7 +551,7 @@ window.FRNav = (() => {
     $('acUser').addEventListener('input', deb(() => { const v = $('acUser').value.trim(); if (v && v !== profile.username) checkUN(v, $('acUserHint'), profile.usernameLower); }, 450));
     $('acSave').onclick = () => run($('acSave'), saveProfile, $('acMsg'));
     $('seEmailBtn').onclick = () => run($('seEmailBtn'), async () => {
-      const ne = $('seNewEmail').value.trim(); if (!ne) throw { message: 'أدخل البريد الجديد' };
+      needNet(); const ne = $('seNewEmail').value.trim(); if (!ne) throw { message: 'أدخل البريد الجديد' };
       await reauth($('seEmailPw').value);
       const r = await mail('change-email', { newEmail: ne }, true);
       if (r && r.status === 409) throw { message: 'هذا البريد مستخدم في حساب آخر' };
@@ -494,12 +560,13 @@ window.FRNav = (() => {
       say($('seEmailMsg'), 'أرسلنا رابط تأكيد إلى ' + ne + '. يتغير بريدك بعد الضغط عليه، وقد تحتاج إلى تسجيل الدخول مجددًا.', 'ok');
     }, $('seEmailMsg'));
     $('sePassBtn').onclick = () => run($('sePassBtn'), async () => {
-      const np = $('sePassNew').value; if (np.length < 8) throw { code: 'auth/weak-password' };
+      needNet(); const np = $('sePassNew').value; if (np.length < 8) throw { code: 'auth/weak-password' };
       await reauth($('sePassOld').value); await user.updatePassword(np);
       $('sePassOld').value = ''; $('sePassNew').value = ''; say($('sePassMsg'), 'تم تغيير كلمة المرور', 'ok');
     }, $('sePassMsg'));
     $('secDelete').onclick = () => run($('secDelete'), deleteAccount, $('seDelMsg'));
     $('sessEndOthers').onclick = async () => {
+      if (!isOnline()) return toast(OFFLINE_MSG);
       if (!(await askConfirm({ title: 'إنهاء الجلسات الأخرى', desc: 'سيتم تسجيل الخروج من كل الأجهزة الأخرى.', label: 'إنهاء الجلسات', danger: true }))) return;
       const s = (await db.ref('sessions/' + user.uid).once('value')).val() || {}, up = {};
       Object.keys(s).forEach((k) => { if (k !== sid) up['sessions/' + user.uid + '/' + k + '/revoked'] = true; });

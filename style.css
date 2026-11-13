@@ -1281,3 +1281,28 @@ body.selecting .msg-bubble.deleted::before { display: none; }
 /* hide the native scrollbar: the glass fast-scroll thumb replaces it */
 .messages-wrap { scrollbar-width: none; -ms-overflow-style: none; }
 .messages-wrap::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* ===== offline / connection bar (slides in under the header, never jumps) ===== */
+.netbar { position: relative; z-index: 4; flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 8px; overflow: hidden;
+  max-height: 0; opacity: 0; padding: 0 14px; font-size: 12px; font-weight: 600; color: var(--text-2);
+  background: linear-gradient(120deg, rgba(37,22,64,.78), rgba(48,25,79,.7));
+  -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%);
+  border-bottom: .5px solid rgba(155,89,182,.22);
+  transition: max-height .42s cubic-bezier(.22,1,.36,1), opacity .3s ease, padding .42s cubic-bezier(.22,1,.36,1); }
+.netbar[data-state="off"], .netbar[data-state="sync"], .netbar[data-state="ok"] { max-height: 36px; opacity: 1; padding: 7px 14px; }
+.netbar .nb-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--text-3); transition: background .3s ease, box-shadow .3s ease; box-sizing: border-box; }
+.netbar[data-state="off"] .nb-dot { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+.netbar[data-state="ok"] .nb-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.netbar[data-state="ok"] { color: var(--success); }
+.netbar[data-state="sync"] .nb-dot { width: 12px; height: 12px; background: transparent; border: 2px solid rgba(95,241,224,.3); border-top-color: var(--neon-cyan); animation: spin .8s linear infinite; }
+
+/* ===== unsent / failed messages ===== */
+.msg-row.pending .msg-bubble { opacity: .78; cursor: default; }
+.msg-row.pending .msg-bubble:active { opacity: .65; }
+.msg-meta .st { display: inline-flex; align-items: center; margin-inline-start: 3px; opacity: .9; }
+.msg-row.pending .st .hand { transform-origin: 12px 12px; animation: clockHand 3s linear infinite; }
+@keyframes clockHand { to { transform: rotate(360deg); } }
+.msg-row.failed .msg-bubble { opacity: .95; box-shadow: 0 0 0 1.2px rgba(255,107,127,.7), var(--shadow-1); }
+.msg-row.failed .st { color: var(--danger); }
+.msg-meta.state-in { animation: stateIn .45s cubic-bezier(.2,.8,.3,1); }
+@keyframes stateIn { from { opacity: 0; transform: translateY(3px); } to { opacity: .72; transform: none; } }

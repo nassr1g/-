@@ -91,6 +91,7 @@
         </button>
       </div>
     </header>
+    <div class="netbar" id="netBar" data-state="" role="status" aria-live="polite"><span class="nb-dot"></span><span id="netBarText"></span></div>
 
     <button class="settings-fab" id="settingsFab" aria-label="الإعدادات"><svg viewBox="0 0 24 24" width="19" height="19"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h12M20 17h0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><circle cx="16" cy="7" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="10" cy="12" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="18" cy="17" r="2" stroke="currentColor" stroke-width="1.8" fill="none"/></svg></button>
 
@@ -219,9 +220,6 @@
 
     <!-- Messages -->
     <main class="messages-wrap" id="messagesWrap">
-      <div class="load-more-row" id="loadMoreRow" style="display:none;">
-        <button class="load-more-btn" id="loadMoreBtn">تحميل رسائل أقدم</button>
-      </div>
       <div class="welcome-card" id="welcomeCard">
         <div class="welcome-mark" id="welcomeBrand">ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ</div>
         <p>ابدأ أول محادثة</p>
@@ -284,6 +282,7 @@
 
   <script src="emoji-data.js"></script>
   <script src="aurora.js"></script>
+  <script src="store.js"></script>
   <script src="auth.js"></script>
   <script src="app.js"></script>
 </body>
