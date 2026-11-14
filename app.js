@@ -1658,11 +1658,19 @@
     replyPreview.classList.remove('edit-mode');
     replyPreviewWho.textContent = activeReply.sender;
     replyPreviewTxt.textContent = activeReply.text;
-    replyPreview.style.display = 'flex';
+    showReplyPreview();
     messageInput.focus();
     revealMessage(key); // the replied message must stay visible above the keyboard
   }
-  function cancelReply() { activeReply = null; if (!editingKey) replyPreview.style.display = 'none'; }
+  let prevHideT = null;
+  function showReplyPreview() { clearTimeout(prevHideT); replyPreview.classList.remove('closing'); replyPreview.style.display = 'flex'; }
+  function hideReplyPreview() {
+    if (replyPreview.style.display === 'none') return;
+    replyPreview.classList.add('closing');
+    clearTimeout(prevHideT);
+    prevHideT = setTimeout(() => { if (!activeReply && !editingKey) replyPreview.style.display = 'none'; replyPreview.classList.remove('closing'); }, 280);
+  }
+  function cancelReply() { activeReply = null; if (!editingKey) hideReplyPreview(); }
   replyCancelBtn.addEventListener('click', () => { cancelReply(); cancelEdit(); });
 
   // ========================================================
@@ -1679,7 +1687,7 @@
     replyPreview.classList.add('edit-mode');
     replyPreviewWho.textContent = 'تعديل الرسالة';
     replyPreviewTxt.textContent = data.text || '';
-    replyPreview.style.display = 'flex';
+    showReplyPreview();
     messageInput.focus();
     const len = messageInput.value.length;
     messageInput.setSelectionRange(len, len);
@@ -1688,7 +1696,7 @@
   function cancelEdit() {
     editingKey = null;
     replyPreview.classList.remove('edit-mode');
-    if (!activeReply) replyPreview.style.display = 'none';
+    if (!activeReply) hideReplyPreview();
   }
 
   // ========================================================
@@ -2387,7 +2395,15 @@
       const target = top + Math.max(0, (bottom - top - el.height) / 2);
       messagesWrap.scrollBy({ top: el.top - target, behavior: 'smooth' });
     };
-    setTimeout(run, 120); setTimeout(run, 450); setTimeout(run, 850);
+    let last = -1, stable = 0, tries = 0;
+    const tick = () => {
+      tries++;
+      const t = bottomDock.getBoundingClientRect().top;
+      stable = Math.abs(t - last) < 1 ? stable + 1 : 0; last = t;
+      if ((stable >= 6 && tries > 15) || tries > 70) { run(); setTimeout(run, 650); return; } // 2nd call only acts if still hidden
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 
   // ---------- Presence: show as offline the moment the user leaves ----------

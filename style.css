@@ -1324,3 +1324,9 @@ body.selecting .msg-bubble.deleted::before { display: none; }
 .composer-glass::after, .composer-glass::before { transition: opacity .3s ease; }
 .bottom-dock { will-change: transform; }
 .messages-wrap { overflow-anchor: none; }
+
+/* ===== reply / edit bar: soft in, soft out ===== */
+.reply-preview { max-height: 96px; overflow: hidden; animation: replyIn .3s cubic-bezier(.22,.8,.24,1);
+  transition: max-height .28s cubic-bezier(.4,0,.2,1), opacity .22s ease, margin .28s ease, padding .28s ease, transform .28s ease; }
+.reply-preview.closing { max-height: 0; opacity: 0; margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; transform: translateY(8px); pointer-events: none; }
+@keyframes replyIn { from { max-height: 0; opacity: 0; transform: translateY(8px); } to { max-height: 96px; opacity: 1; transform: none; } }
