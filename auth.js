@@ -185,6 +185,13 @@ window.FRNav = (() => {
     auth.getRedirectResult().catch((e) => { show('login'); say(M(), errText(e), 'err'); });
     auth.onAuthStateChanged(handleUser);
     auth.onIdTokenChanged(() => { if (started && user) saveSession(); });
+    // safety net: never sit on the spinner. If nothing answered in 12s, open from the saved profile or say what is wrong.
+    setTimeout(async () => {
+      if (started || !overlay.querySelector('.auth-pane.active[data-pane="loading"]')) return;
+      const cu = auth.currentUser, cached = await ST.getMeta('profile');
+      if (cu && cached && cached.uid === cu.uid) { user = cu; profile = cached; finishReady(false); return; }
+      show('login'); say(M(), 'تعذر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.', 'err');
+    }, 12000);
     window.addEventListener('online', () => { if (!started && auth.currentUser) handleUser(auth.currentUser); });
   }
   async function handleUser(u) {

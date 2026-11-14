@@ -2773,7 +2773,11 @@
     buildEmojiPanel();
     updateConnectionUI();
 
-    if (!firebaseReady) { bootChat(false); return; }
+    if (!firebaseReady) { // the Firebase scripts could not be loaded (never leave the spinner running forever)
+      const pane = document.querySelector('[data-pane="loading"]');
+      if (pane) pane.innerHTML = '<p style="text-align:center;line-height:1.8;margin:18px 0">تعذر تحميل مكتبات الموقع.<br>اتصل بالإنترنت مرة واحدة ثم أعد المحاولة.</p><button class="abtn primary" onclick="location.reload()"><span>إعادة المحاولة</span></button>';
+      return;
+    }
     FRAuth.start({
       db,
       onReady: (p, isNew) => { myUid = p.uid; myName = p.displayName; myJoined = Number(p.hf) || 0; bootChat(isNew); },

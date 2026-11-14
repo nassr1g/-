@@ -7,7 +7,7 @@
 'use strict';
 importScripts('/store.js');
 
-const CACHE = 'fr-shell-v1';
+const CACHE = 'fr-shell-v1'; // (kept: bumping would drop the saved copies)
 const NET_TIMEOUT = 3500; // slow network -> fall back to the saved copy
 const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/auth.js', '/app.js',
   '/manifest.webmanifest', '/icons/app-icon-192.png', '/icons/app-icon-512.png', '/icons/apple-touch-icon.png'];
@@ -15,7 +15,7 @@ const FIREBASE_JS = ['app', 'database', 'auth', 'messaging'].map((n) => 'https:/
 const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600&display=swap';
 
 async function cacheCross(cache, url) {
-  if (await cache.match(url)) return;
+  if (await cache.match(url, { ignoreVary: true })) return;
   let res;
   try { res = await fetch(url, { mode: 'cors' }); } catch (e) { res = await fetch(url, { mode: 'no-cors' }); }
   if (res && (res.ok || res.type === 'opaque')) await cache.put(url, res);
@@ -53,13 +53,14 @@ async function networkFirst(event, req, fallbackUrl) {
   let res = null;
   try { res = await Promise.race([net, timer]); } catch (e) { res = null; }
   if (res) return res;
-  const hit = (await cache.match(req, { ignoreSearch: true })) || (fallbackUrl ? await cache.match(fallbackUrl) : null);
+  const opt = { ignoreSearch: true, ignoreVary: true };
+  const hit = (await cache.match(req, opt)) || (await cache.match(req.url, opt)) || (fallbackUrl ? await cache.match(fallbackUrl, opt) : null);
   if (hit) return hit;
   return net;
 }
 async function cacheFirst(event, req) {
   const cache = await caches.open(CACHE);
-  const hit = await cache.match(req);
+  const hit = (await cache.match(req, { ignoreVary: true })) || (await cache.match(req.url, { ignoreVary: true }));
   if (hit) return hit;
   const res = await fetch(req);
   if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone()).catch(() => {});
