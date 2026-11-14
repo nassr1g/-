@@ -925,8 +925,15 @@
   // Stay pinned to the newest message when the chat area changes size
   // (keyboard opens, reply bar appears, banner closes) - but only if the
   // reader was already at the bottom.
-  let pinnedToBottom = true;
-  messagesWrap.addEventListener('scroll', () => { pinnedToBottom = isNearBottom(); }, { passive: true });
+  let pinnedToBottom = true, kbHold = 0;
+  // After the keyboard opens/closes (or the viewport changes) keep the newest message in view
+  function stickBottomSoon() {
+    if (!pinnedToBottom && Date.now() >= kbHold) return;
+    [0, 100, 250, 450, 700].forEach((ms) => setTimeout(() => {
+      if (pinnedToBottom || Date.now() < kbHold) messagesWrap.scrollTop = messagesWrap.scrollHeight;
+    }, ms));
+  }
+  messagesWrap.addEventListener('scroll', () => { pinnedToBottom = isNearBottom() || Date.now() < kbHold; }, { passive: true });
   if (window.ResizeObserver) {
     new ResizeObserver(() => { if (pinnedToBottom) messagesWrap.scrollTop = messagesWrap.scrollHeight; }).observe(messagesWrap);
   }
@@ -1653,6 +1660,7 @@
     replyPreviewTxt.textContent = activeReply.text;
     replyPreview.style.display = 'flex';
     messageInput.focus();
+    revealMessage(key); // the replied message must stay visible above the keyboard
   }
   function cancelReply() { activeReply = null; if (!editingKey) replyPreview.style.display = 'none'; }
   replyCancelBtn.addEventListener('click', () => { cancelReply(); cancelEdit(); });
@@ -2114,6 +2122,8 @@
       document.activeElement === messageInput || emojiPanelOpen || !!messageInput.value.trim());
   }
   messageInput.addEventListener('focus', updateComposerExpanded);
+  messageInput.addEventListener('focus', () => { if (isNearBottom()) { pinnedToBottom = true; kbHold = Date.now() + 1100; } stickBottomSoon(); });
+  messageInput.addEventListener('blur', () => { if (isNearBottom()) { kbHold = Date.now() + 700; stickBottomSoon(); } });
   messageInput.addEventListener('blur', () => setTimeout(updateComposerExpanded, 0));
 
   // touch light: a soft highlight follows the finger across the glass
@@ -2150,8 +2160,10 @@
         appEl.style.transform = '';
       }
     };
-    vv.addEventListener('resize', sync);
-    vv.addEventListener('scroll', sync);
+    let kbRaf = 0; // one update per frame while the keyboard animates
+    const onVV = () => { if (kbRaf) return; kbRaf = requestAnimationFrame(() => { kbRaf = 0; sync(); stickBottomSoon(); }); };
+    vv.addEventListener('resize', onVV);
+    vv.addEventListener('scroll', onVV);
     window.addEventListener('orientationchange', () => setTimeout(() => { baseH = vv.height; sync(); }, 450));
     sync();
   })();

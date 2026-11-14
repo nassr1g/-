@@ -1315,3 +1315,12 @@ body.selecting .msg-bubble.deleted::before { display: none; }
 
 .composer-glass .composer-input { transition: height .4s cubic-bezier(.22,.8,.24,1); }
 .composer.growing .composer-glass, .composer.growing .bottom-dock { transition: none; }
+
+/* ===== smooth keyboard / typing: only cheap, compositor-friendly motion ===== */
+.composer.expanded .composer-glass { animation: none; }               /* no scale "pop" on a blurred layer */
+.composer.expanded .composer-glass::before { animation: none; }       /* static rim: the spinning conic gradient repainted every frame */
+.composer, .composer.expanded { transition: padding .3s cubic-bezier(.22,.8,.24,1); }
+.composer-glass { transition: box-shadow .3s ease, background .3s ease; }
+.composer-glass::after, .composer-glass::before { transition: opacity .3s ease; }
+.bottom-dock { will-change: transform; }
+.messages-wrap { overflow-anchor: none; }

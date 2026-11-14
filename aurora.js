@@ -11,12 +11,18 @@
   const ctx = canvas.getContext('2d');
   let w, h, dpr;
 
+  let baseW = 0;
   function resize() {
     dpr = 0.5; // soft blobs don't need full resolution: a quarter of the pixels to paint
-    w = window.innerWidth;
-    h = window.innerHeight;
+    const iw = window.innerWidth, ih = window.innerHeight;
+    // The on-screen keyboard only shrinks the HEIGHT: ignore that, so the background never changes when it opens.
+    // (A real change of width, e.g. rotation, resets it.)
+    if (!baseW || iw !== baseW) { baseW = iw; h = ih; } else if (ih > h) h = ih;
+    w = iw;
     canvas.width = w * dpr;
     canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
   window.addEventListener('resize', resize);
