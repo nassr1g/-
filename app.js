@@ -388,7 +388,9 @@
     messageInput.style.height = target + 'px';
     if (prev && target !== prev && composerEl) {
       composerEl.classList.add('growing');
-      clearTimeout(autoGrow._t); autoGrow._t = setTimeout(() => composerEl.classList.remove('growing'), 420);
+      document.documentElement.style.setProperty('--dock-h', (bottomDock.offsetHeight + (target - prev)) + 'px');
+      if (pinnedToBottom) messagesWrap.scrollTop = messagesWrap.scrollHeight;
+      clearTimeout(autoGrow._t); autoGrow._t = setTimeout(() => { composerEl.classList.remove('growing'); syncDock(); }, 450);
     }
     sendBtn.classList.toggle('empty', !messageInput.value.trim());
     updateComposerExpanded();
@@ -512,12 +514,24 @@
     lastEvt.set(k, Date.now());
     if (lastEvt.size > 600) { const old = Date.now() - 20000; lastEvt.forEach((v, key) => { if (v < old) lastEvt.delete(key); }); }
     remoteQ.push({ rec: toRec(k, d), live: syncLive });
-    if (!remoteTimer) remoteTimer = setTimeout(flushRemote, 40);
+    if (!remoteTimer) remoteTimer = setTimeout(flushRemote, 16);
   }
   async function flushRemote() {
     remoteTimer = null;
-    const batch = remoteQ; remoteQ = [];
+    let batch = remoteQ; remoteQ = [];
     if (!batch.length) return;
+    // messages already on screen: show the change immediately, save it afterwards
+    const rest = [];
+    batch.forEach((b) => {
+      const kn = allMessagesByKey.get(b.rec.k);
+      if (kn && !kn.pending && !kn.data.deleted) {
+        msgCursor = Math.max(msgCursor, Number(b.rec.timestamp) || 0);
+        applyUpsert({ next: b.rec }, b.live);
+        Store.upsertMany([b.rec]);
+      } else rest.push(b);
+    });
+    batch = rest;
+    if (!batch.length) { persistCursors(); return; }
     const res = await Store.upsertMany(batch.map((b) => b.rec));
     res.forEach((r, i) => {
       if (!r) return;
@@ -919,6 +933,7 @@
   // The composer area floats over the chat (messages scroll beneath the glass);
   // keep the chat's bottom padding equal to its height.
   const syncDock = () => {
+    if (document.querySelector('.composer.growing')) return; // the final height was reserved at the start of the animation
     document.documentElement.style.setProperty('--dock-h', bottomDock.offsetHeight + 'px');
     if (pinnedToBottom) messagesWrap.scrollTop = messagesWrap.scrollHeight;
   };
@@ -1050,7 +1065,7 @@
     scheduleRegroup();
     if (!data.pending && (!scanOldest || cmpTK(Number(data.timestamp) || 0, key, scanOldest.ts, scanOldest.k) < 0)) scanOldest = { ts: Number(data.timestamp) || 0, k: key };
 
-    if (!isDeleted && data.react) updateReactionsUI(key, reactMap(data.react));
+    if (!isDeleted) updateReactionsUI(key, reactMap(data.react)); // also sets the reaction baseline so the very first reaction animates
   }
 
   // rows are kept in order: confirmed messages by (server time, key), unsent ones last
@@ -1747,22 +1762,34 @@
     return m;
   }
 
+  // patch a message that is on screen right now (no waiting for storage / network), then persist it
+  function patchNow(key, fn) {
+    const entry = allMessagesByKey.get(key);
+    if (!entry) return localPatch(key, fn);
+    const rec = fn(Object.assign({ k: key }, entry.data)) || entry.data;
+    applyUpsert({ next: rec }, true);
+    Store.upsertMany([rec]);
+  }
   function toggleMyReaction(key, emoji) {
-    if (!requireOnline()) return;
     const entry = allMessagesByKey.get(key);
     if (entry && entry.pending) return;
-    const cur = entry && entry.data.react && entry.data.react[myUid];
+    const prevReact = entry && entry.data.react;
+    const cur = prevReact && prevReact[myUid];
     const off = !!cur && cur.emoji === emoji;
+    patchNow(key, (r) => {          // instant feedback, exactly like before
+      const m = Object.assign({}, r.react || {});
+      if (off) delete m[myUid]; else m[myUid] = { emoji, name: myName, ts: serverNow() };
+      if (Object.keys(m).length) r.react = m; else delete r.react;
+      return r;
+    });
     const path = 'chat/messages/' + key + '/react/' + myUid;
     writeChange('r', key, { [path]: off ? null : { emoji, name: myName, ts: SV() } }).then(() => {
-      localPatch(key, (r) => {
-        const m = Object.assign({}, r.react || {});
-        if (off) delete m[myUid]; else m[myUid] = { emoji, name: myName, ts: serverNow() };
-        if (Object.keys(m).length) r.react = m; else delete r.react;
-        return r;
-      });
       if (!off && entry && entry.data.senderUid !== myUid) notifyServer(key, 0, emoji);
-    }).catch((err) => { console.error('reaction error', err); showSystemError('تعذر حفظ التفاعل'); });
+    }).catch((err) => {
+      console.error('reaction error', err);
+      patchNow(key, (r) => { if (prevReact) r.react = prevReact; else delete r.react; return r; }); // undo
+      showSystemError('تعذر حفظ التفاعل');
+    });
   }
 
   function updateReactionsUI(key, reactions) {

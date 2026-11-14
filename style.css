@@ -1312,3 +1312,6 @@ body.selecting .msg-bubble.deleted::before { display: none; }
 .composer-glass .composer-input { transition: height .34s cubic-bezier(.25,.75,.2,1); }
 .composer.growing .composer-glass::before { animation-play-state: paused; }
 .composer.growing .composer-glass::after, .composer.growing .glass-glow { transition: none; }
+
+.composer-glass .composer-input { transition: height .4s cubic-bezier(.22,.8,.24,1); }
+.composer.growing .composer-glass, .composer.growing .bottom-dock { transition: none; }
