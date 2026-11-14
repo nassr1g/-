@@ -386,6 +386,10 @@
     if (prev) { messageInput.style.height = prev + 'px'; void messageInput.offsetHeight; }
     messageInput.style.transition = '';
     messageInput.style.height = target + 'px';
+    if (prev && target !== prev && composerEl) {
+      composerEl.classList.add('growing');
+      clearTimeout(autoGrow._t); autoGrow._t = setTimeout(() => composerEl.classList.remove('growing'), 420);
+    }
     sendBtn.classList.toggle('empty', !messageInput.value.trim());
     updateComposerExpanded();
     scheduleDraft();
@@ -476,7 +480,11 @@
     chgCursor = (await Store.getMeta('chgCursor')) || 0;
     setTimeout(() => { if (!introStarted) onStableConnection(); }, 900);
     renderNetBar();
-    messagesWrap.addEventListener('scroll', () => { if (messagesWrap.scrollTop < 400) loadOlder(); }, { passive: true });
+    let topTick = false, trimT = null;
+    messagesWrap.addEventListener('scroll', () => {
+      if (!topTick) { topTick = true; requestAnimationFrame(() => { topTick = false; if (messagesWrap.scrollTop < 400) loadOlder(); }); }
+      clearTimeout(trimT); trimT = setTimeout(trimTop, 450);
+    }, { passive: true });
     setTimeout(() => { if (messagesWrap.scrollHeight <= messagesWrap.clientHeight + 200) loadOlder(); }, 500);
     startRemoteSync();
     kickOutbox();
@@ -574,15 +582,29 @@
   }
 
   // ---------- older history (from the device first, then Firebase in pages) ----------
+  let olderDone = false, olderTryAt = 0;
+  // Keeps the page light: after the reader comes back to the bottom, rows far above are dropped
+  // from the DOM (they stay in IndexedDB and are re-added when scrolling up again).
+  function trimTop() {
+    if (!isNearBottom()) return;
+    const rows = messagesList.querySelectorAll(':scope > .msg-row');
+    if (rows.length <= 280) return;
+    const drop = rows.length - 160, dist = messagesWrap.scrollHeight - messagesWrap.scrollTop;
+    for (let i = 0; i < drop; i++) { allMessagesByKey.delete(rows[i].dataset.key); rows[i].remove(); }
+    scanOldest = { ts: Number(rows[drop].dataset.ts) || 0, k: rows[drop].dataset.key };
+    olderDone = false;
+    scheduleRegroup();
+    messagesWrap.scrollTop = messagesWrap.scrollHeight - dist;
+  }
   async function loadOlder() {
-    if (loadingOlder || !scanOldest) return;
+    if (loadingOlder || !scanOldest || olderDone || Date.now() < olderTryAt) return;
     loadingOlder = true;
     try {
       for (let n = 0; n < 6; n++) {
         if (clearedBefore && scanOldest.ts <= clearedBefore) break;
         let batch = await Store.before(scanOldest.ts, scanOldest.k, WINDOW);
         if (!batch.length && !historyComplete) batch = await fetchOlderPage();
-        if (!batch.length) break;
+        if (!batch.length) { if (historyComplete) olderDone = true; else olderTryAt = Date.now() + 1500; break; }
         const before = allMessagesByKey.size;
         prependBatch(batch);
         if (allMessagesByKey.size > before) break; // something visible was added
@@ -778,7 +800,7 @@
     if (!rec) return;
     rec = fn(rec) || rec;
     const r = await Store.upsertMany([rec]);
-    applyUpsert({ next: r[0] ? r[0].next : rec }, false);
+    applyUpsert({ next: r[0] ? r[0].next : rec }, true);
   }
 
   // ---------- connection bar ----------

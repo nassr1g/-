@@ -12,7 +12,7 @@
   let w, h, dpr;
 
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = 0.5; // soft blobs don't need full resolution: a quarter of the pixels to paint
     w = window.innerWidth;
     h = window.innerHeight;
     canvas.width = w * dpr;
@@ -35,7 +35,7 @@
     { color: [130, 58, 190],  cx: 0.55, cy: 0.92, ax: 0.24, ay: 0.16, freqX: 0.00065, freqY: -0.001, phase: 4.2, rBase: 0.85, rAmp: 0.15, rFreq: 0.0008 }
   ];
 
-  let raf = null;
+  let raf = null, lastDraw = 0;
   let visible = true;
   document.addEventListener('visibilitychange', () => {
     visible = !document.hidden;
@@ -44,6 +44,8 @@
 
   function loop(ts) {
     if (!visible) { raf = null; return; }
+    if (ts - lastDraw < 32) { raf = requestAnimationFrame(loop); return; } // ~30fps leaves the CPU/GPU free for scrolling
+    lastDraw = ts;
     const t = ts || 0;
 
     ctx.fillStyle = BASE;

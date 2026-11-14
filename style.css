@@ -1306,3 +1306,9 @@ body.selecting .msg-bubble.deleted::before { display: none; }
 .msg-row.failed .st { color: var(--danger); }
 .msg-meta.state-in { animation: stateIn .45s cubic-bezier(.2,.8,.3,1); }
 @keyframes stateIn { from { opacity: 0; transform: translateY(3px); } to { opacity: .72; transform: none; } }
+
+/* ===== performance / smoothness ===== */
+.msg-row { will-change: auto; contain: layout style; }  /* one compositor layer per message was too heavy */
+.composer-glass .composer-input { transition: height .34s cubic-bezier(.25,.75,.2,1); }
+.composer.growing .composer-glass::before { animation-play-state: paused; }
+.composer.growing .composer-glass::after, .composer.growing .glass-glow { transition: none; }
