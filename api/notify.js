@@ -33,6 +33,15 @@ async function deliver(db, messages, tokens) {
   return { sent: result.successCount, failed: result.failureCount };
 }
 
+const MEN = /(^|[\s(\[{«"'،؛:!?؟—\-])@([A-Za-z0-9_]{3,20})(?![A-Za-z0-9_@])/g;
+async function mentionedUids(db, text) {
+  const names = new Set(); let m; MEN.lastIndex = 0;
+  while ((m = MEN.exec(text || '')) && names.size < 10) names.add(m[2].toLowerCase());
+  const uids = new Set();
+  await Promise.all(Array.from(names).map(async (l) => { const s = await db.ref('usernames/' + l).get(); if (s.exists()) uids.add(s.val()); }));
+  return uids;
+}
+
 async function handleMessage(db, key, uid) {
   const msgSnap = await db.ref('chat/messages/' + key).get();
   if (!msgSnap.exists()) return [404, { error: 'no-message' }];
@@ -49,17 +58,19 @@ async function handleMessage(db, key, uid) {
     replyTargetUid = t.val();
   }
 
+  const mentioned = await mentionedUids(db, msg.text);
   const records = (await db.ref('chat/push').get()).val() || {};
   const messages = [], tokens = [];
   Object.keys(records).forEach((token) => {
     const rec = records[token];
     if (!rec || rec.uid === msg.senderUid) return;
     const isReply = !!replyTargetUid && rec.uid === replyTargetUid;
+    const isMention = mentioned.has(rec.uid) && rec.muteMention !== true;
     if (rec.mute === 'all') return;
-    if (rec.mute === 'normal' && !isReply) return;
+    if (rec.mute === 'normal' && !isReply && !isMention) return;
     tokens.push(token);
     messages.push(build(token, {
-      type: isReply ? 'reply' : 'message',
+      type: isReply ? 'reply' : (isMention ? 'mention' : 'message'),
       key,
       sender: String(msg.senderName || '').slice(0, 20),
       text: String(msg.text || '').slice(0, 180),
