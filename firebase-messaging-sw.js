@@ -9,7 +9,7 @@ importScripts('/store.js');
 
 const CACHE = 'fr-shell-v1'; // (kept: bumping would drop the saved copies)
 const NET_TIMEOUT = 3500; // slow network -> fall back to the saved copy
-const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/auth.js', '/app.js',
+const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/rich.js', '/auth.js', '/app.js',
   '/manifest.webmanifest', '/icons/app-icon-192.png', '/icons/app-icon-512.png', '/icons/apple-touch-icon.png'];
 const FIREBASE_JS = ['app', 'database', 'auth', 'messaging'].map((n) => 'https://www.gstatic.com/firebasejs/10.12.2/firebase-' + n + '-compat.js');
 const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600&display=swap';
@@ -134,11 +134,26 @@ async function flushOutboxBG() {
 }
 self.addEventListener('sync', (event) => { if (event.tag === 'fr-outbox') event.waitUntil(flushOutboxBG()); });
 
+/* delivery receipt for a push that arrives while the site is closed */
+async function markDeliveredBG(d) {
+  try {
+    if (!d || (d.type !== 'message' && d.type !== 'reply' && d.type !== 'mention')) return;
+    const ts = Number(d.ts); if (!ts) return;
+    const auth = await self.FRStore.getMeta('auth');
+    if (!auth || !auth.refreshToken) return;
+    const tok = await idTokenFor(auth);
+    if (!tok) return;
+    await fetch(auth.dbUrl + '/chat/receipts/' + encodeURIComponent(auth.uid) + '.json?auth=' + encodeURIComponent(tok), { method: 'PATCH', body: JSON.stringify({ d: ts }) });
+  } catch (e) {}
+}
+
 /* ---------------- push notifications ---------------- */
 const SITE_NAME = "ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ";
 const ICON = '/icons/notif-message.png';
 const ICON_REPLY = '/icons/notif-reply.png';
 const ICON_REACT = '/icons/notif-reaction.png';
+const ICON_MENTION = '/icons/notif-mention.png';
+const BADGE_MENTION = '/icons/badge-mention.png';
 const BADGE = '/icons/badge-message.png';
 const BADGE_REPLY = '/icons/badge-reply.png';
 const BADGE_REACT = '/icons/badge-reaction.png';
@@ -157,6 +172,7 @@ async function handlePush(d) {
 
   // If the page is open and visible, it plays its own in-app sound.
   // (iOS requires every push to show a notification, so it always shows.)
+  markDeliveredBG(d); // the message reached this device: tell the sender (best effort)
   const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   const pageVisible = wins.some((c) => c.visibilityState === 'visible');
   if (pageVisible && !IS_IOS) return;
@@ -177,6 +193,22 @@ async function handlePush(d) {
       vibrate: [180, 70, 180, 70, 260],
       timestamp: ts,
       data: { url: '/', type: 'reply', key: d.key || '' }
+    });
+    return;
+  }
+
+  if (d.type === 'mention') {
+    await self.registration.showNotification(sender + ' • أشار إليك', {
+      body: text,
+      icon: ICON_MENTION,
+      badge: BADGE_MENTION,
+      tag: 'mention-' + (d.key || ts),
+      renotify: true,
+      dir: 'rtl',
+      lang: 'ar',
+      vibrate: [150, 60, 150, 60, 220],
+      timestamp: ts,
+      data: { url: '/', type: 'mention', key: d.key || '' }
     });
     return;
   }

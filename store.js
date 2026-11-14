@@ -89,6 +89,7 @@
   api.recent = (n) => rd(collect('msgs', 'tk', null, 'prev', n), []);
   api.before = (ts, k, n) => rd(collect('msgs', 'tk', G.IDBKeyRange.upperBound([ts, k], true), 'prev', n), []);
   api.between = (fromTs, toTs, toK, cap) => rd(collect('msgs', 'tk', G.IDBKeyRange.bound([fromTs, ''], [toTs, toK], false, true), 'next', cap), []);
+  api.after = (ts, k, n) => rd(collect('msgs', 'tk', G.IDBKeyRange.lowerBound([ts, k], true), 'next', n), []);
   api.oldest = () => rd(collect('msgs', 'tk', null, 'next', 1), []).then((a) => a[0] || null);
 
   // ---- outbox (messages waiting to be sent) ----

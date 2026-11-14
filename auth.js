@@ -634,5 +634,5 @@ window.FRNav = (() => {
     s.c.classList.remove('show'); setTimeout(() => s.layer.remove(), 420); // layer stays briefly so the closing tap can't hit what's underneath
   }
 
-  window.FRAuth = { start, users, nameOf, mkAvatar, openCard, openSettings };
+  window.FRAuth = { start, users, nameOf, mkAvatar, openCard, openSettings, me: () => profile };
 })();

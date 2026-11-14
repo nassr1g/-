@@ -103,6 +103,22 @@
           }
         }
       },
+      "receipts": {
+        ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists()",
+        "$uid": {
+          ".write": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists() && $uid === auth.uid",
+          ".validate": "newData.hasChildren()",
+          "d": {
+            ".validate": "newData.isNumber() && newData.val() <= now && (!data.exists() || newData.val() >= data.val())"
+          },
+          "r": {
+            ".validate": "newData.isNumber() && newData.val() <= now && (!data.exists() || newData.val() >= data.val())"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
       "events": {
         ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists()",
         ".indexOn": [
@@ -169,6 +185,9 @@
           },
           "$other": {
             ".validate": false
+          },
+          "muteMention": {
+            ".validate": "newData.isBoolean()"
           }
         }
       },
