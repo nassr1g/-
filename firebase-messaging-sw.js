@@ -45,18 +45,24 @@ self.addEventListener('activate', (event) => event.waitUntil((async () => {
 })()));
 
 // network first (always fresh when online), saved copy when offline / very slow
-async function networkFirst(event, req, fallbackUrl) {
+const staleClients = new Set(); // pages that were opened from the saved copy: keep serving them from the saved copy
+async function networkFirst(event, req, fallbackUrl, timeoutMs, onSaved) {
   const cache = await caches.open(CACHE);
   const net = fetch(req).then((res) => { if (res && res.ok) cache.put(req, res.clone()).catch(() => {}); return res; });
   event.waitUntil(net.catch(() => {}));
-  const timer = new Promise((r) => setTimeout(() => r(null), NET_TIMEOUT));
+  const timer = new Promise((r) => setTimeout(() => r(null), timeoutMs || NET_TIMEOUT));
   let res = null;
   try { res = await Promise.race([net, timer]); } catch (e) { res = null; }
   if (res) return res;
   const opt = { ignoreSearch: true, ignoreVary: true };
   const hit = (await cache.match(req, opt)) || (await cache.match(req.url, opt)) || (fallbackUrl ? await cache.match(fallbackUrl, opt) : null);
-  if (hit) return hit;
+  if (hit) { if (onSaved) onSaved(); return hit; }
   return net;
+}
+async function savedFirst(event, req) {
+  const cache = await caches.open(CACHE);
+  const hit = (await cache.match(req, { ignoreSearch: true, ignoreVary: true })) || (await cache.match(req.url, { ignoreSearch: true, ignoreVary: true }));
+  return hit || networkFirst(event, req, null, 8000);
 }
 async function cacheFirst(event, req) {
   const cache = await caches.open(CACHE);
@@ -73,8 +79,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
     if (url.pathname.indexOf('/api/') === 0 || url.pathname.indexOf('/__/') === 0) return; // server calls & auth handler: never cached
-    if (req.mode === 'navigate') { event.respondWith(networkFirst(event, req, '/index.html')); return; }
-    event.respondWith(networkFirst(event, req, null));
+    if (req.mode === 'navigate') { event.respondWith(networkFirst(event, req, '/index.html', NET_TIMEOUT, () => { if (event.resultingClientId) staleClients.add(event.resultingClientId); })); return; }
+    if (event.clientId && staleClients.has(event.clientId)) { event.respondWith(savedFirst(event, req)); return; }
+    event.respondWith(networkFirst(event, req, null, 8000));
     return;
   }
   if (url.hostname === 'www.gstatic.com' && url.pathname.indexOf('/firebasejs/') === 0) { event.respondWith(cacheFirst(event, req)); return; }
