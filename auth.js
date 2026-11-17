@@ -526,7 +526,7 @@ window.FRNav = (() => {
     const uid = user.uid, up = {};
     try { if (O.beforeSignOut) await O.beforeSignOut(); } catch (e) {}
     up['users/' + uid] = null; up['usernames/' + profile.usernameLower] = null; up['sessions/' + uid] = null;
-    up['chat/presence/' + uid] = null; up['chat/typing/' + uid] = null;
+    up['chat/presence/' + uid] = null; up['chat/typing/' + uid] = null; up['chat/receipts/' + uid] = null;
     await db.ref().update(up);
     await user.delete();
     try { localStorage.removeItem(LS_SID); } catch (e) {}

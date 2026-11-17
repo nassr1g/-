@@ -486,11 +486,22 @@
 
   // Accounts created from now on carry `hf` (server time of joining, enforced by the rules): they never see older messages.
   // Older accounts have no `hf` -> 0 -> full history, exactly as before.
-  async function getHistoryFrom() { return myJoined || 0; }
+  async function getHistoryFrom() {
+    let hf = myJoined || 0;
+    try {
+      if (navigator.onLine !== false) { // ask the server (the authority) instead of trusting a saved copy
+        const s = await tmo(db.ref('users/' + myUid + '/hf').once('value'), 6000);
+        const v = s.val(); hf = typeof v === 'number' ? v : 0;
+        Store.setMeta('hf', hf);
+      } else { const c = await Store.getMeta('hf'); if (typeof c === 'number') hf = c; }
+    } catch (e) { const c = await Store.getMeta('hf'); if (typeof c === 'number') hf = c; }
+    return hf;
+  }
 
   async function bootMessages() {
     // 1) paint from the device immediately — no network involved
     lastRead = loadRead();
+    loadMentions();
     firstOpen = !lastRead;
     let local;
     if (lastRead) { // around the last message the reader saw, plus everything after it
@@ -673,11 +684,11 @@
     const handle = document.createElement('div'); handle.className = 'sheet-handle';
     const h4 = document.createElement('h4'); h4.textContent = 'حالة الرسالة';
     sheet.appendChild(handle); sheet.appendChild(h4);
-    const rd = list.filter((x) => x.r >= T), dl = list.filter((x) => x.d >= T && x.r < T), wt = list.filter((x) => x.d < T && x.r < T);
+    const rd = list.filter((x) => x.r >= T), dl = list.filter((x) => x.d >= T && x.r < T);
     const sum = document.createElement('div'); sum.className = 'quick-hint';
-    sum.textContent = list.length ? 'قرأها ' + rd.length + ' من ' + list.length + ' · وصلت إلى ' + (rd.length + dl.length) + ' من ' + list.length : 'لا توجد بيانات استلام بعد.';
+    sum.textContent = (rd.length + dl.length) ? 'قرأها ' + rd.length + ' · استلمها ' + (rd.length + dl.length) + ' من أصل ' + list.length : 'لم تصل إلى أحد بعد.';
     sheet.appendChild(sum);
-    [['قرأها', rd, 'read'], ['وصلت إليهم', dl, 'deliv'], ['لم تصل بعد', wt, 'wait']].forEach(([title, arr, kind]) => {
+    [['قرأها', rd, 'read'], ['استلمها (ولم يقرأها بعد)', dl, 'deliv']].forEach(([title, arr, kind]) => {
       if (!arr.length) return;
       const h = document.createElement('div'); h.className = 'rc-h ' + kind; h.textContent = title + ' (' + arr.length + ')';
       sheet.appendChild(h);
@@ -706,17 +717,37 @@
     try { const v = localStorage.getItem(LS_READ_KEY + myUid); if (v) { const i = v.indexOf('|'); return { ts: Number(v.slice(0, i)), k: v.slice(i + 1) }; } } catch (e) {}
     return null;
   }
+  const LS_MEN_KEY = 'otaku_unread_men_v1_', menSince = new Map();
+  function loadMentions() { try { JSON.parse(localStorage.getItem(LS_MEN_KEY + myUid) || '[]').forEach((k) => unreadMentions.add(k)); } catch (e) {} }
+  function saveMentions() { try { localStorage.setItem(LS_MEN_KEY + myUid, JSON.stringify(Array.from(unreadMentions).slice(-150))); } catch (e) {} }
+  // a mention counts as read only after its message stayed fully visible for ~0.7s (like Telegram)
+  function checkMentionsSeen() {
+    if (!unreadMentions.size) return;
+    const lim = bottomDock.getBoundingClientRect().top - 8, top = messagesWrap.getBoundingClientRect().top + 8, now = Date.now();
+    let waiting = false, changed = false;
+    unreadMentions.forEach((k) => {
+      const e = allMessagesByKey.get(k); let vis = false;
+      if (e) {
+        const r = e.el.getBoundingClientRect(), vh = Math.min(r.bottom, lim) - Math.max(r.top, top);
+        vis = vh >= Math.min((r.height || 1) * 0.7, (lim - top) * 0.6);
+      }
+      if (vis) { const s = menSince.get(k) || now; menSince.set(k, s); if (now - s >= 700) { unreadMentions.delete(k); menSince.delete(k); changed = true; } else waiting = true; }
+      else menSince.delete(k);
+    });
+    if (changed) { saveMentions(); updateUnreadUI(); }
+    if (waiting) setTimeout(scheduleSeen, 260);
+  }
   function saveRead() { try { localStorage.setItem(LS_READ_KEY + myUid, lastRead.ts + '|' + lastRead.k); } catch (e) {} }
   function trackUnread(key, data) {
     if (!lastRead || data.pending || data.deleted || data.senderUid === myUid) return;
     if (cmpTK(Number(data.timestamp) || 0, key, lastRead.ts, lastRead.k) <= 0) return;
     unread.add(key);
-    if (mentionsMe(data.text)) unreadMentions.add(key);
+    if (mentionsMe(data.text) && !unreadMentions.has(key)) { unreadMentions.add(key); saveMentions(); }
   }
   function markRead(ts, k) {
     if (lastRead && cmpTK(ts, k, lastRead.ts, lastRead.k) <= 0) return;
     lastRead = { ts, k }; saveRead();
-    unread.forEach((key) => { const e = allMessagesByKey.get(key); if (!e || cmpTK(Number(e.data.timestamp) || 0, key, ts, k) <= 0) { unread.delete(key); unreadMentions.delete(key); } });
+    unread.forEach((key) => { const e = allMessagesByKey.get(key); if (!e || cmpTK(Number(e.data.timestamp) || 0, key, ts, k) <= 0) unread.delete(key); }); // mentions are NOT cleared by scrolling past them
     updateUnreadUI();
     rcptR = Math.max(rcptR, ts); scheduleReceipts();
   }
@@ -727,9 +758,11 @@
   function scheduleSeen() { if (!seenT) seenT = setTimeout(checkSeen, 180); }
   function checkSeen() { // the newest message whose top is on screen has been read
     seenT = null;
-    if (document.visibilityState !== 'visible' || bootHold || (!unread.size && !firstOpen)) return;
+    if (document.visibilityState !== 'visible' || bootHold) return;
     const sp = document.getElementById('settingsPanel');
     if (sp && sp.classList.contains('open')) return;
+    checkMentionsSeen();
+    if (!unread.size && !firstOpen) return;
     const lim = bottomDock.getBoundingClientRect().top - 20, top = messagesWrap.getBoundingClientRect().top;
     const rows = messagesList.children;
     for (let i = rows.length - 1; i >= 0; i--) {
@@ -791,22 +824,21 @@
     setTimeout(() => { bootHold = false; scheduleSeen(); }, 700);
   }
   ['touchstart', 'wheel', 'pointerdown'].forEach((ev) => messagesWrap.addEventListener(ev, () => { if (bootAlign || bootHold) { bootAlign = false; bootHold = false; } }, { passive: true }));
-  mentionBtn.addEventListener('click', () => {
-    let bk = null, bt = 0;
-    unreadMentions.forEach((k) => { const e = allMessagesByKey.get(k); const ts = e ? Number(e.data.timestamp) || 0 : 0; if (e && (bk === null || ts < bt)) { bk = k; bt = ts; } });
+  mentionBtn.addEventListener('click', () => { // go to the oldest mention you haven't seen (push keys are time-ordered)
+    let bk = null;
+    unreadMentions.forEach((k) => { if (bk === null || k < bk) bk = k; });
     if (bk) jumpToMessage(bk);
   });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSeen(); });
 
   // ---------- remote -> device ----------
-  async function startRemoteSync() {
-    historyFrom = await getHistoryFrom();
-    historyReady = true;
-    const firstRun = !msgCursor;
+  let remoteQuery = null, healTries = 0, deniedShown = false;
+  function attachRemote(firstRun) {
     let q = messagesRef.orderByChild('timestamp');
     q = firstRun ? q.startAt(historyFrom).limitToLast(INITIAL) : q.startAt(Math.max(msgCursor, historyFrom));
-    q.on('child_added', queueRemote);
-    q.on('child_changed', queueRemote);
+    remoteQuery = q;
+    q.on('child_added', queueRemote, onReadDenied);
+    q.on('child_changed', queueRemote, onReadDenied);
     q.once('value', () => {
       syncLive = true;
       setTimeout(() => {
@@ -814,6 +846,25 @@
         if (bootAlign && !unreadSep) { bootAlign = false; bootHold = false; scheduleSeen(); } // nothing new: no frozen position
       }, 900);
     });
+  }
+  function onReadDenied(err) { // the rules refused this query: re-read the join time from the server and retry
+    console.warn('messages read refused', err && err.message);
+    if (healTries < 2) {
+      healTries++;
+      setTimeout(async () => {
+        try { if (remoteQuery) remoteQuery.off(); } catch (e) {}
+        historyFrom = await getHistoryFrom();
+        attachRemote(!msgCursor);
+      }, 700);
+    } else if (!deniedShown) {
+      deniedShown = true;
+      showToast('تعذر قراءة الرسائل بسبب الصلاحيات. حدّث الصفحة أو أعد تسجيل الدخول.', null, null, true, 8000);
+    }
+  }
+  async function startRemoteSync() {
+    historyFrom = await getHistoryFrom();
+    historyReady = true;
+    attachRemote(!msgCursor);
     if (isConnected) startChangesFeed();
   }
 
@@ -869,6 +920,7 @@
       if (known.pending) { confirmPending(k, next); return; }
       reactQuiet = !live;
       updateExistingMessage(k, next);
+      if (next.deleted && unreadMentions.delete(k)) { saveMentions(); updateUnreadUI(); }
       updateReactionsUI(k, reactMap(next.react));
       reactQuiet = false;
       return;
@@ -2883,6 +2935,25 @@
     if (btn) setMuteMode(btn.dataset.mode);
   });
   notifEnableBtn.addEventListener('click', enableNotifications);
+  const notifTestBtn = $('notifTestBtn');
+  if (notifTestBtn) notifTestBtn.addEventListener('click', async () => {
+    const lines = [], perm = notifPermission();
+    lines.push('الإذن: ' + (perm === 'granted' ? 'مفعّل' : perm === 'denied' ? 'محظور' : 'لم يُطلب بعد'));
+    try {
+      const reg = swReg || await registerServiceWorker();
+      lines.push('الخدمة الخلفية: ' + (reg && reg.active ? 'تعمل' : 'غير جاهزة'));
+      if (perm === 'granted' && reg) {
+        let tok = pushToken;
+        if (!tok) { try { tok = await fetchPushToken(); if (tok) await saveTokenRecord(tok); } catch (e) {} }
+        if (tok) {
+          const s = await Promise.race([db.ref('chat/push/' + tok).once('value'), new Promise((r) => setTimeout(() => r(null), 6000))]);
+          lines.push('رمز هذا الجهاز: ' + (s && s.exists() ? 'مسجّل' : 'غير مسجّل في الخادم'));
+        } else lines.push('رمز هذا الجهاز: لم يُنشأ');
+        await reg.showNotification(SITE_NAME, { body: 'هذا اختبار لشكل الإشعار', icon: '/icons/notif-message.png', badge: '/icons/badge-message.png', tag: 'test', dir: 'rtl', lang: 'ar', vibrate: [120, 60, 120] });
+      }
+    } catch (e) { lines.push('خطأ: ' + (e && e.message ? e.message : e)); }
+    showToast(lines.join(' · '), null, null, false, 9000);
+  });
   muteReactToggle.addEventListener('click', () => {
     muteReactOn = !muteReactOn;
     try { localStorage.setItem(LS_MUTEREACT_KEY, muteReactOn ? '1' : '0'); } catch (e) {}
@@ -3134,6 +3205,14 @@
   // ========================================================
   function init() {
     registerServiceWorker(); // offline shell + background sending: register as early as possible
+    if ('serviceWorker' in navigator) {
+      const hadController = !!navigator.serviceWorker.controller;
+      navigator.serviceWorker.addEventListener('controllerchange', () => { // a new version took over: reload once to use its files
+        if (!hadController || messageInput.value.trim()) return;
+        try { if (sessionStorage.getItem('fr_sw_reload')) return; sessionStorage.setItem('fr_sw_reload', '1'); } catch (e) {}
+        location.reload();
+      });
+    }
     loadMuteMode();
     loadLocalPrefs();
     brandIntroText.textContent = CONNECT_TEXT;

@@ -175,11 +175,18 @@ self.addEventListener('push', (event) => {
 });
 
 async function handlePush(d) {
+  try { await showForPush(d); }
+  catch (e) { // never let a push go without a visible notification
+    try { if (d && (d.text || d.sender)) await self.registration.showNotification(SITE_NAME, { body: String(d.text || ''), icon: ICON, badge: BADGE, dir: 'rtl', lang: 'ar' }); } catch (e2) {}
+  }
+  finally { markDeliveredBG(d); } // delivery receipt only after the notification is already on screen
+}
+
+async function showForPush(d) {
   if (!d || (!d.text && !d.sender)) return;
 
   // If the page is open and visible, it plays its own in-app sound.
   // (iOS requires every push to show a notification, so it always shows.)
-  markDeliveredBG(d); // the message reached this device: tell the sender (best effort)
   const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   const pageVisible = wins.some((c) => c.visibilityState === 'visible');
   if (pageVisible && !IS_IOS) return;
