@@ -17,6 +17,7 @@ async function wipeUser(db, uid, lower, apply) {
   up['users/' + uid] = null; up['sessions/' + uid] = null;
   up['chat/presence/' + uid] = null; up['chat/typing/' + uid] = null; up['chat/receipts/' + uid] = null;
   if (lower) up['usernames/' + lower] = null;
+  up['removedUsers/' + uid] = Date.now(); // tells every device to drop this account from its saved list
   const push = (await db.ref('chat/push').get()).val() || {};
   Object.keys(push).forEach((t) => { if (push[t] && push[t].uid === uid) up['chat/push/' + t] = null; });
   if (apply) await db.ref().update(up);
