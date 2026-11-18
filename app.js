@@ -2935,24 +2935,35 @@
     if (btn) setMuteMode(btn.dataset.mode);
   });
   notifEnableBtn.addEventListener('click', enableNotifications);
-  const notifTestBtn = $('notifTestBtn');
+  const notifTestBtn = $('notifTestBtn'), notifTestOut = $('notifTestOut');
+  const errTxt = (e) => String((e && (e.message || e.code)) || e || '').slice(0, 120);
   if (notifTestBtn) notifTestBtn.addEventListener('click', async () => {
-    const lines = [], perm = notifPermission();
-    lines.push('الإذن: ' + (perm === 'granted' ? 'مفعّل' : perm === 'denied' ? 'محظور' : 'لم يُطلب بعد'));
+    const rows = [];
+    const draw = () => {
+      if (!notifTestOut) return;
+      notifTestOut.style.display = 'block'; notifTestOut.textContent = '';
+      rows.forEach((r) => { const d = document.createElement('div'); d.className = 'nt-row ' + (r[0] ? 'ok' : 'bad'); d.textContent = (r[0] ? '✓ ' : '✗ ') + r[1]; notifTestOut.appendChild(d); });
+    };
+    notifTestBtn.disabled = true;
+    const perm = notifPermission();
+    rows.push([perm === 'granted', 'الإذن: ' + (perm === 'granted' ? 'مفعّل' : perm === 'denied' ? 'محظور من إعدادات المتصفح' : 'لم يُطلب بعد')]);
     try {
-      const reg = swReg || await registerServiceWorker();
-      lines.push('الخدمة الخلفية: ' + (reg && reg.active ? 'تعمل' : 'غير جاهزة'));
+      const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(() => r(null), 6000))]);
+      rows.push([!!(reg && reg.active), 'الخدمة الخلفية: ' + (reg && reg.active ? 'تعمل' : 'غير جاهزة')]);
       if (perm === 'granted' && reg) {
         let tok = pushToken;
-        if (!tok) { try { tok = await fetchPushToken(); if (tok) await saveTokenRecord(tok); } catch (e) {} }
+        try { if (!tok) tok = await fetchPushToken(); } catch (e) { rows.push([false, 'تعذر إنشاء رمز الجهاز: ' + errTxt(e)]); }
         if (tok) {
-          const s = await Promise.race([db.ref('chat/push/' + tok).once('value'), new Promise((r) => setTimeout(() => r(null), 6000))]);
-          lines.push('رمز هذا الجهاز: ' + (s && s.exists() ? 'مسجّل' : 'غير مسجّل في الخادم'));
-        } else lines.push('رمز هذا الجهاز: لم يُنشأ');
-        await reg.showNotification(SITE_NAME, { body: 'هذا اختبار لشكل الإشعار', icon: '/icons/notif-message.png', badge: '/icons/badge-message.png', tag: 'test', dir: 'rtl', lang: 'ar', vibrate: [120, 60, 120] });
+          try { await tmo(saveTokenRecord(tok), 8000); rows.push([true, 'رمز الجهاز مسجّل في الخادم']); }
+          catch (e) { rows.push([false, 'تعذر تسجيل رمز الجهاز: ' + errTxt(e)]); }
+        }
+        try {
+          await reg.showNotification(SITE_NAME, { body: 'هذا اختبار لشكل الإشعار', icon: '/icons/notif-message.png', badge: '/icons/badge-message.png', tag: 'test', dir: 'rtl', lang: 'ar', vibrate: [120, 60, 120] });
+          rows.push([true, 'تم عرض إشعار تجريبي بالتصميم الحقيقي']);
+        } catch (e) { rows.push([false, 'تعذر عرض الإشعار: ' + errTxt(e)]); }
       }
-    } catch (e) { lines.push('خطأ: ' + (e && e.message ? e.message : e)); }
-    showToast(lines.join(' · '), null, null, false, 9000);
+    } catch (e) { rows.push([false, 'خطأ: ' + errTxt(e)]); }
+    draw(); notifTestBtn.disabled = false;
   });
   muteReactToggle.addEventListener('click', () => {
     muteReactOn = !muteReactOn;

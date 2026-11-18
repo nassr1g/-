@@ -150,13 +150,16 @@ window.FRNav = (() => {
   async function watchUsers() {
     const r = db.ref('users');
     const cursor = (await ST.getMeta('usersCursor')) || 0, fullAt = (await ST.getMeta('usersFullAt')) || 0;
-    const full = !cursor || !users.size || Date.now() - fullAt > 864e5;
+    const schema = await ST.getMeta('usersSchema');
+    const full = !cursor || !users.size || Date.now() - fullAt > 864e5 || schema !== 2; // schema 2: one full refresh drops ghosts left in old caches
     let maxC = cursor, timer = null; const dirty = new Map();
     const flush = () => { timer = null; const arr = []; dirty.forEach((v, uid) => arr.push(Object.assign({ uid }, v))); dirty.clear(); ST.putUsers(arr); ST.setMeta('usersCursor', maxC); };
     const upd = (s) => {
       const v = s.val(); users.set(s.key, v); refreshDom(s.key);
       if (v) { maxC = Math.max(maxC, v.updatedAt || v.joinedAt || 0); dirty.set(s.key, v); if (!timer) timer = setTimeout(flush, 800); }
     };
+    // removed accounts announce themselves here, so every device drops them at once (a delta sync can't see deletions)
+    db.ref('removedUsers').on('child_added', (s) => { users.delete(s.key); refreshDom(s.key); ST.delUsers([s.key]); });
     const q = full ? r : r.orderByChild('updatedAt').startAt(cursor);
     q.on('child_added', upd); q.on('child_changed', upd);
     if (full) {
@@ -166,7 +169,7 @@ window.FRNav = (() => {
         const gone = []; users.forEach((_, uid) => { if (!keep.has(uid)) gone.push(uid); });
         gone.forEach((uid) => { users.delete(uid); refreshDom(uid); });
         if (gone.length) ST.delUsers(gone);
-        ST.setMeta('usersFullAt', Date.now());
+        ST.setMeta('usersFullAt', Date.now()); ST.setMeta('usersSchema', 2);
       }).catch(() => {});
     }
   }
@@ -526,7 +529,7 @@ window.FRNav = (() => {
     const uid = user.uid, up = {};
     try { if (O.beforeSignOut) await O.beforeSignOut(); } catch (e) {}
     up['users/' + uid] = null; up['usernames/' + profile.usernameLower] = null; up['sessions/' + uid] = null;
-    up['chat/presence/' + uid] = null; up['chat/typing/' + uid] = null; up['chat/receipts/' + uid] = null;
+    up['chat/presence/' + uid] = null; up['chat/typing/' + uid] = null; up['chat/receipts/' + uid] = null; up['removedUsers/' + uid] = TS();
     await db.ref().update(up);
     await user.delete();
     try { localStorage.removeItem(LS_SID); } catch (e) {}

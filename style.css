@@ -1397,3 +1397,9 @@ body.selecting .msg-bubble.deleted::before { display: none; }
 .tick.big svg { width: 20px; height: 20px; }
 .rc-h { font-size: 12px; font-weight: 700; margin: 12px 2px 2px; color: var(--text-2); }
 .rc-h.read { color: var(--neon-cyan); } .rc-h.wait { color: var(--text-3); }
+
+/* toasts must also be visible on top of the settings pages; notification test results */
+.app .float-stack { z-index: 60; } /* auth.css sets z-index 9 and loads after this file, so this needs the extra specificity */
+#notifTestOut { margin: 0 0 14px; }
+.nt-row { font-size: 12.5px; line-height: 1.5; padding: 8px 12px; margin-top: 6px; border-radius: 12px; background: rgba(255,255,255,.05); border: .5px solid rgba(255,255,255,.08); }
+.nt-row.ok { color: var(--success); } .nt-row.bad { color: var(--danger); background: rgba(255,107,127,.1); border-color: rgba(255,107,127,.25); }

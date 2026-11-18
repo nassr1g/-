@@ -278,6 +278,13 @@
           }
         }
       }
+    },
+    "removedUsers": {
+      ".read": "auth != null && auth.token.email_verified === true",
+      "$uid": {
+        ".write": "auth != null && auth.token.email_verified === true && auth.uid === $uid && !data.exists()",
+        ".validate": "newData.val() === now"
+      }
     }
   }
 }
