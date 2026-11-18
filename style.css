@@ -1403,3 +1403,12 @@ body.selecting .msg-bubble.deleted::before { display: none; }
 #notifTestOut { margin: 0 0 14px; }
 .nt-row { font-size: 12.5px; line-height: 1.5; padding: 8px 12px; margin-top: 6px; border-radius: 12px; background: rgba(255,255,255,.05); border: .5px solid rgba(255,255,255,.08); }
 .nt-row.ok { color: var(--success); } .nt-row.bad { color: var(--danger); background: rgba(255,107,127,.1); border-color: rgba(255,107,127,.25); }
+
+/* notification test: visible progress */
+.notif-enable-btn.busy { display: flex; align-items: center; justify-content: center; gap: 9px; opacity: .92; pointer-events: none; }
+.notif-enable-btn.busy::before { content: ''; width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; animation: spin .7s linear infinite; }
+.nt-row { animation: ntIn .35s cubic-bezier(.22,.8,.24,1) both; }
+@keyframes ntIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.nt-row.run { color: var(--text-2); }
+.nt-row.run::after { content: ''; display: inline-block; animation: ntDots 1.2s steps(1, end) infinite; }
+@keyframes ntDots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
