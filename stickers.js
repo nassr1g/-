@@ -126,13 +126,14 @@
   }
   document.addEventListener('pointerdown', (e) => { if (pill && !e.target.closest('.stk-pill')) hidePill(); }, true);
   function bindTap(h, stk) { // one tap -> save option (delayed so a double-tap can still be the quick reaction)
-    let tm = null, sx = 0, sy = 0;
+    let last = 0, sx = 0, sy = 0;
     h.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; });
     h.addEventListener('click', (e) => {
       if (h.classList.contains('err') || Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) return;
       if (document.body.classList.contains('selecting') || document.querySelector('.ctx-menu.show')) return;
-      if (tm) { clearTimeout(tm); tm = null; return; }
-      tm = setTimeout(() => { tm = null; showPill(h, stk); }, 340);
+      const now = Date.now(); // shown at once; a second tap (double-tap = reaction) hides it
+      if (now - last < 350) { last = 0; hidePill(); return; }
+      last = now; showPill(h, stk);
     });
   }
   function makeEl(stk) {
@@ -245,10 +246,12 @@
   }
   function toggleVideos(on) { if (view) view.querySelectorAll('video').forEach((v) => { if (on) v.play().catch(() => {}); else v.pause(); }); }
   function panelOpened(isReaction) {
+    $('bottomDock').classList.add('panel-open');
+    const mi = $('messageInput'); if (document.activeElement === mi) mi.blur();
     let m = 'emoji'; if (!isReaction) { try { m = localStorage.getItem(LS_MODE) || 'emoji'; } catch (e) {} }
     setMode(m === 'stk' ? 'stk' : 'emoji', false);
   }
-  function panelClosed() { toggleVideos(false); }
+  function panelClosed() { $('bottomDock').classList.remove('panel-open'); toggleVideos(false); }
   function section(title) {
     const w = el('section', 'stk-sec'), g = el('div', 'stk-grid');
     const e = el('div', 'stk-empty', title === 'recent' ? 'الملصقات التي ترسلها ستظهر هنا' : 'اضغط مطولًا على أي ملصق لحفظه هنا');
@@ -265,7 +268,7 @@
     sc.appendChild(secs.recent.w); sc.appendChild(secs.saved.w);
     view.appendChild(acts); view.appendChild(sc);
     $('panelSwitch').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && b.dataset.m !== mode) setMode(b.dataset.m, true); });
-    bc.addEventListener('click', () => pickFiles('image/*,video/*', false, (f) => openEditor(f[0])));
+    bc.addEventListener('click', () => pickFiles('image/*,video/*', false, (f) => openEditor(f[0]).catch((e) => { console.warn(e); err('تعذر فتح الملف، جرّب ملفًا آخر'); })));
     bi.addEventListener('click', () => openImport());
     startLib(); renderLib(); handleShared();
   }
@@ -338,7 +341,9 @@
     return { kind: '', mime: '' };
   }
   async function openEditor(f0) {
-    const t = await sniff(f0), file = f0.slice(0, f0.size, t.mime), isVid = !!t.video;
+    const t = await sniff(f0), isVid = !!t.video; let file;
+    try { file = f0.size <= 30 * 1048576 ? new Blob([await f0.arrayBuffer()], { type: t.mime }) : f0.slice(0, f0.size, t.mime); } // copy into memory: picked files (Photos / cloud) can become unreadable later
+    catch (e) { return err('تعذرت قراءة الملف (ربما على التخزين السحابي). انسخه إلى جهازك ثم أعد المحاولة.'); }
     const raw = t.kind === 'gif' || (t.kind === 'webp' && t.anim); // animated image: keep the original bytes (motion preserved)
     if (!t.mime) return err('هذا النوع من الملفات غير مدعوم. اختر صورة أو GIF أو فيديو.');
     if (raw && file.size > 6 * 1048576) return err('حجم الصورة المتحركة كبير (الحد 6MB). جرّب فيديو قصيرًا بدلًا منها.');
@@ -354,8 +359,16 @@
         video = document.createElement('video'); video.muted = true; video.loop = true; video.playsInline = true; video.setAttribute('playsinline', ''); video.preload = 'auto'; video.src = url;
         await new Promise((res, rej) => { const ok = () => { if (video.videoWidth) res(); }; video.onloadedmetadata = ok; video.onloadeddata = ok; video.oncanplay = ok; video.onerror = () => rej(new Error('v')); setTimeout(() => rej(new Error('timeout')), 12000); video.play().catch(() => {}); });
         src = video; sw = video.videoWidth; sh = video.videoHeight;
-      } else { src = await loadImg(url); sw = src.naturalWidth; sh = src.naturalHeight; }
-    } catch (e) { O.close(); return err('تعذر قراءة هذا الملف'); }
+      } else if (raw) { src = await loadImg(url); sw = src.naturalWidth; sh = src.naturalHeight; }
+      else { try { src = await createImageBitmap(file); } catch (e) { src = await loadImg(url); } sw = src.naturalWidth || src.width; sh = src.naturalHeight || src.height; }
+      if (!sw || !sh) throw new Error('dims');
+    } catch (e) {
+      console.warn('editor load', e); box.remove();
+      O.sh.appendChild(el('div', 'stk-msgline', 'تعذر قراءة هذا الملف. جرّب صورة JPG أو PNG أو WebP، أو GIF، أو فيديو MP4.'));
+      const rb = btn('primary', 'اختيار ملف آخر');
+      rb.onclick = () => pickFiles('image/*,video/*', false, (f) => { O.close(); setTimeout(() => openEditor(f[0]).catch(() => err('تعذر فتح الملف')), 450); });
+      O.sh.appendChild(rb); return;
+    }
     if (!raw) {
       cv = el('canvas'); cv.width = cv.height = N; ctx = cv.getContext('2d', { willReadFrequently: true }); box.appendChild(cv);
     } else { const im = el('img'); im.src = url; box.appendChild(im); }
@@ -483,7 +496,8 @@
     grid.style.display = 'none'; tools.style.display = 'none'; go.style.display = 'none';
     const all = el('button', 'stk-chip', 'تحديد الكل'), cnt = el('span', 'stk-cnt');
     tools.appendChild(all); tools.appendChild(cnt);
-    O.sh.appendChild(intro); O.sh.appendChild(pickB); O.sh.appendChild(status); O.sh.appendChild(tools); O.sh.appendChild(grid); O.sh.appendChild(bar); O.sh.appendChild(go);
+    const foot = el('div', 'stk-foot'); foot.appendChild(bar); foot.appendChild(go); O.sh.classList.add('stk-imp');
+    O.sh.appendChild(intro); O.sh.appendChild(pickB); O.sh.appendChild(status); O.sh.appendChild(tools); O.sh.appendChild(grid); O.sh.appendChild(foot);
     const sel = () => items.filter((i) => i.sel);
     const upd = () => { const n = sel().length; cnt.textContent = n + ' / ' + items.length; go.firstChild.textContent = 'استيراد المحدد (' + n + ')'; go.disabled = !n; all.textContent = n === items.length ? 'إلغاء التحديد' : 'تحديد الكل'; };
     async function run(files) {
@@ -495,9 +509,9 @@
       busy(pickB, false);
       if (!items.length) { status.textContent = 'لم نجد ملصقات في هذا الملف.'; return; }
       status.textContent = 'اختر الملصقات التي تريد استيرادها (ستجد هنا ما أرسلته وما استلمته).';
-      grid.textContent = ''; grid.style.display = ''; tools.style.display = ''; go.style.display = '';
+      intro.style.display = 'none'; O.sh.classList.add('has'); grid.textContent = ''; grid.style.display = ''; tools.style.display = ''; go.style.display = '';
       items.forEach((it) => {
-        const c = el('div', 'stk-icell'), im = el('img'); im.src = it.url; im.alt = ''; c.appendChild(im);
+        const c = el('div', 'stk-icell'), im = el('img'); im.loading = 'lazy'; im.decoding = 'async'; im.src = it.url; im.alt = ''; c.appendChild(im);
         c.onclick = () => { it.sel = !it.sel; c.classList.toggle('sel', it.sel); upd(); };
         grid.appendChild(c);
       });
