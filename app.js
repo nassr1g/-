@@ -438,6 +438,7 @@
     startReceipts();
     listenForEvents();
     initNotifications();
+    if (window.FRStickers) FRStickers.boot();
 
     if (isFreshJoin) {
       eventsRef.push({
@@ -1036,13 +1037,14 @@
 
   // ---------- device -> Firebase: the outbox ----------
   function pendingData(r) {
-    return { text: r.text, senderUid: r.senderUid, senderName: r.senderName, timestamp: r.created, replyTo: r.replyTo, pending: true, state: r.state };
+    return { text: r.text, senderUid: r.senderUid, senderName: r.senderName, timestamp: r.created, replyTo: r.replyTo, sticker: r.sticker, pending: true, state: r.state };
   }
   function renderPending(r) { renderMessage(r.k, pendingData(r), true); }
 
-  async function queueMessage(text) {
+  async function queueMessage(text, sticker) {
     const k = db.ref('chat/messages').push().key; // generated on the device: unique, time-ordered, works offline
     const rec = { k, text, senderUid: myUid, senderName: myName, created: Date.now(), state: 'pending', tries: 0 };
+    if (sticker) rec.sticker = sticker;
     if (activeReply) rec.replyTo = { key: activeReply.key, sender: activeReply.sender, text: activeReply.text.slice(0, 120) };
     cancelReply();
     outbox.set(k, rec); pendingKeys.add(k);
@@ -1083,6 +1085,7 @@
     try {
       const payload = { text: rec.text, senderUid: rec.senderUid, senderName: rec.senderName, timestamp: SV() };
       if (rec.replyTo) payload.replyTo = rec.replyTo;
+      if (rec.sticker) payload.sticker = rec.sticker;
       await tmo(ref.set(payload), 15000);
       const s = await tmo(ref.once('value'), 10000); // answered from the local cache
       return await confirmSent(rec, s.val() || Object.assign({}, payload, { timestamp: serverNow() }));
@@ -1397,7 +1400,8 @@
       }
       const textDiv = document.createElement('div');
       textDiv.className = 'msg-text';
-      setMsgText(textDiv, data.text);
+      if (data.sticker && window.FRStickers) { bubble.classList.add('sticker-bubble'); textDiv.className = 'msg-stk'; textDiv.appendChild(FRStickers.makeEl(data.sticker)); }
+      else setMsgText(textDiv, data.text);
       bubble.appendChild(textDiv);
       if (data.edited) {
         const tag = document.createElement('span');
@@ -1631,6 +1635,7 @@
 
       swapBubble(bubble, () => {
         bubble.innerHTML = '';
+        bubble.classList.remove('sticker-bubble');
         bubble.classList.add('deleted');
         bubble.appendChild(trashGlyph());
         const textDiv = document.createElement('div');
@@ -1893,14 +1898,15 @@
       closeContextMenu();
     });
     list.appendChild(replyItem);
-    if (!data.deleted) list.appendChild(makeCtxItem(copyGlyphMenu(), 'نسخ الرسالة', () => {
+    if (!data.deleted && !data.sticker) list.appendChild(makeCtxItem(copyGlyphMenu(), 'نسخ الرسالة', () => {
       closeContextMenu();
       copyText(((allMessagesByKey.get(key) || { data }).data.text) || '', 1);
     }));
+    if (data.sticker && !data.deleted && window.FRStickers) list.appendChild(makeCtxItem(starGlyphMenu(), 'حفظ الملصق', () => { closeContextMenu(); FRStickers.save(data.sticker); }));
     list.appendChild(makeCtxItem(checkGlyphMenu(), 'تحديد', () => { enterSelect(key); closeContextMenu(); }));
     if (mine && !data.deleted && !(allMessagesByKey.get(key) || {}).pending) list.appendChild(makeCtxItem(tickGlyphMenu(), 'حالة الرسالة', () => { closeContextMenu(); showReceipts(key); }));
 
-    if (mine && !data.deleted) {
+    if (mine && !data.deleted && !data.sticker) {
       list.appendChild(makeCtxItem(editGlyphMenu(), 'تعديل الرسالة', () => {
         closeContextMenu();
         if (!canEdit(key)) { showSystemError(EDIT_ERR); return; }
@@ -1998,6 +2004,12 @@
     const wrap = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     wrap.setAttribute('viewBox', '0 0 24 24'); wrap.setAttribute('width', '18'); wrap.setAttribute('height', '18');
     wrap.innerHTML = '<path d="M5 7H19M10 11V16M14 11V16M6 7L7 19A2 2 0 0 0 9 21H15A2 2 0 0 0 17 19L18 7M9 7V4A1 1 0 0 1 10 3H14A1 1 0 0 1 15 4V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>';
+    return wrap;
+  }
+  function starGlyphMenu() {
+    const wrap = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    wrap.setAttribute('viewBox', '0 0 24 24'); wrap.setAttribute('width', '18'); wrap.setAttribute('height', '18');
+    wrap.innerHTML = '<path d="M12 4l2.4 5 5.4.7-4 3.8 1 5.4L12 16.3 7.2 18.9l1-5.4-4-3.8 5.4-.7z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" fill="none"/>';
     return wrap;
   }
   function copyGlyphMenu() {
@@ -2296,9 +2308,9 @@
     autoGrow();
   }
 
-  function openEmojiPanel() { if (!emojiPanelOpen) FRNav.push('emoji', hideEmojiPanel); emojiPanel.classList.add('open'); emojiToggleBtn.classList.add('active'); emojiPanelOpen = true; updateComposerExpanded(); }
+  function openEmojiPanel() { if (!emojiPanelOpen) FRNav.push('emoji', hideEmojiPanel); if (window.FRStickers) FRStickers.panelOpened(!!pendingReactionTargetKey); emojiPanel.classList.add('open'); emojiToggleBtn.classList.add('active'); emojiPanelOpen = true; updateComposerExpanded(); }
   function closeEmojiPanel() { if (emojiPanelOpen) FRNav.back('emoji'); }
-  function hideEmojiPanel() { emojiPanel.classList.remove('open'); emojiToggleBtn.classList.remove('active'); emojiPanelOpen = false; pendingReactionTargetKey = null; updateComposerExpanded(); }
+  function hideEmojiPanel() { if (window.FRStickers) FRStickers.panelClosed(); emojiPanel.classList.remove('open'); emojiToggleBtn.classList.remove('active'); emojiPanelOpen = false; pendingReactionTargetKey = null; updateComposerExpanded(); }
   emojiToggleBtn.addEventListener('click', () => { if (emojiPanelOpen) closeEmojiPanel(); else openEmojiPanel(); });
 
   document.addEventListener('pointerdown', (e) => {
@@ -3221,6 +3233,8 @@
   // ========================================================
   // Init
   // ========================================================
+  window.FRChat = { sendSticker: (s) => queueMessage('ملصق', s), toast: showToast, sheet: openActionSheet, db: () => db, uid: () => myUid, online: () => !!(isConnected && firebaseReady) };
+
   function init() {
     registerServiceWorker(); // offline shell + background sending: register as early as possible
     if ('serviceWorker' in navigator) {

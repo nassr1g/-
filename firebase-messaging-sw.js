@@ -9,7 +9,7 @@ importScripts('/store.js');
 
 const CACHE = 'fr-shell-v1'; // (kept: bumping would drop the saved copies)
 const NET_TIMEOUT = 3500; // slow network -> fall back to the saved copy
-const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/rich.js', '/auth.js', '/app.js',
+const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/rich.js', '/stickers.js', '/stickers.css', '/auth.js', '/app.js',
   '/manifest.webmanifest', '/icons/app-icon-192.png', '/icons/app-icon-512.png', '/icons/apple-touch-icon.png'];
 const FIREBASE_JS = ['app', 'database', 'auth', 'messaging'].map((n) => 'https://www.gstatic.com/firebasejs/10.12.2/firebase-' + n + '-compat.js');
 const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600&display=swap';
@@ -73,8 +73,19 @@ async function cacheFirst(event, req) {
   return res;
 }
 
+// files shared to the installed site (e.g. WhatsApp sticker files / chat export) -> kept for the page, then redirect
+async function handleShare(req) {
+  try {
+    const fd = await req.formData(), files = fd.getAll('files').filter((f) => f && f.size), c = await caches.open('fr-share');
+    await Promise.all((await c.keys()).map((k) => c.delete(k)));
+    await Promise.all(files.slice(0, 500).map((f, i) => c.put('/__share/' + i, new Response(f, { headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-Name': encodeURIComponent(f.name || ('f' + i)) } }))));
+  } catch (e) {}
+  return Response.redirect('/?share=1', 303);
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+  if (req.method === 'POST' && new URL(req.url).pathname === '/share-target') { event.respondWith(handleShare(req)); return; }
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
@@ -118,6 +129,7 @@ async function flushOutboxBG() {
     const url = auth.dbUrl + '/chat/messages/' + encodeURIComponent(rec.k) + '.json?auth=' + encodeURIComponent(tok);
     const body = { text: rec.text, senderUid: rec.senderUid, senderName: rec.senderName, timestamp: { '.sv': 'timestamp' } };
     if (rec.replyTo) body.replyTo = rec.replyTo;
+    if (rec.sticker) body.sticker = rec.sticker;
     const put = await fetch(url, { method: 'PUT', body: JSON.stringify(body) });   // network error -> throws -> browser retries the sync
     if (put.status >= 500) throw new Error('server');
     let data = null;

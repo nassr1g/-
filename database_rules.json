@@ -73,6 +73,27 @@
               }
             }
           },
+          "sticker": {
+            ".validate": "newData.hasChildren(['h','u','w','g','a'])",
+            "h": {
+              ".validate": "newData.isString() && newData.val().length === 64"
+            },
+            "u": {
+              ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/[A-Za-z0-9_-]+\\/(image|video)\\/upload\\/.*/)"
+            },
+            "w": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2048"
+            },
+            "g": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2048"
+            },
+            "a": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
           "$other": {
             ".validate": false
           }
@@ -284,6 +305,95 @@
       "$uid": {
         ".write": "auth != null && auth.token.email_verified === true && auth.uid === $uid && !data.exists()",
         ".validate": "newData.val() === now"
+      }
+    },
+    "stickers": {
+      "$h": {
+        ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists()",
+        ".write": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists() && !data.exists() && newData.exists()",
+        ".validate": "$h.matches(/^[a-f0-9]{64}$/) && newData.hasChildren(['u','w','g','a','by','ts'])",
+        "u": {
+          ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/[A-Za-z0-9_-]+\\/(image|video)\\/upload\\/.*/)"
+        },
+        "w": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2048"
+        },
+        "g": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2048"
+        },
+        "a": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2"
+        },
+        "by": {
+          ".validate": "newData.val() === auth.uid"
+        },
+        "ts": {
+          ".validate": "newData.val() === now"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "stickerLib": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.token.email_verified === true && auth.uid === $uid",
+        "saved": {
+          ".indexOn": [
+            "ts"
+          ],
+          "$h": {
+            ".validate": "$h.matches(/^[a-f0-9]{64}$/) && newData.hasChildren(['u','w','g','a','ts'])",
+            "u": {
+              ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/[A-Za-z0-9_-]+\\/(image|video)\\/upload\\/.*/)"
+            },
+            "w": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2048"
+            },
+            "g": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2048"
+            },
+            "a": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "recent": {
+          ".indexOn": [
+            "ts"
+          ],
+          "$h": {
+            ".validate": "$h.matches(/^[a-f0-9]{64}$/) && newData.hasChildren(['u','w','g','a','ts'])",
+            "u": {
+              ".validate": "newData.isString() && newData.val().length <= 300 && newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/[A-Za-z0-9_-]+\\/(image|video)\\/upload\\/.*/)"
+            },
+            "w": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2048"
+            },
+            "g": {
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 2048"
+            },
+            "a": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2"
+            },
+            "ts": {
+              ".validate": "newData.val() === now"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     }
   }
