@@ -39,13 +39,10 @@
         {
           "name": "files",
           "accept": [
-            "application/zip",
-            "application/x-zip-compressed",
-            "application/x-zip",
-            "application/octet-stream",
             "image/webp",
             "image/png",
-            "image/*",
+            "application/zip",
+            "application/x-zip-compressed",
             ".zip",
             ".webp"
           ]
