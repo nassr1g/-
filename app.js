@@ -1902,7 +1902,7 @@
       closeContextMenu();
       copyText(((allMessagesByKey.get(key) || { data }).data.text) || '', 1);
     }));
-    if (data.sticker && !data.deleted && window.FRStickers) list.appendChild(makeCtxItem(starGlyphMenu(), 'حفظ الملصق', () => { closeContextMenu(); FRStickers.save(data.sticker); }));
+    if (data.sticker && !data.deleted && window.FRStickers) list.appendChild(makeCtxItem(starGlyphMenu(), FRStickers.isSaved(data.sticker.h) ? 'إزالة من المحفوظة' : 'حفظ الملصق', () => { closeContextMenu(); FRStickers.toggle(data.sticker); }));
     list.appendChild(makeCtxItem(checkGlyphMenu(), 'تحديد', () => { enterSelect(key); closeContextMenu(); }));
     if (mine && !data.deleted && !(allMessagesByKey.get(key) || {}).pending) list.appendChild(makeCtxItem(tickGlyphMenu(), 'حالة الرسالة', () => { closeContextMenu(); showReceipts(key); }));
 

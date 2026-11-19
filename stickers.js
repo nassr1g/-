@@ -121,16 +121,18 @@
     const r = h.getBoundingClientRect(), w = p.offsetWidth, ph = p.offsetHeight; let top = r.top - ph - 8; if (top < 70) top = r.bottom + 8;
     p.style.top = Math.max(8, Math.min(top, innerHeight - ph - 8)) + 'px'; p.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - 8)) + 'px';
     requestAnimationFrame(() => p.classList.add('show'));
-    p.onclick = () => { hidePill(); if (saved) libRef('saved/' + stk.h).remove().catch(() => err('تعذرت الإزالة')); else save(stk); };
-    pill = p; pillT = setTimeout(hidePill, 3500);
+    p.onclick = () => { hidePill(); toggle(stk); };
+    p._h = h; pill = p; pillT = setTimeout(hidePill, 3500);
   }
-  document.addEventListener('pointerdown', (e) => { if (pill && !e.target.closest('.stk-pill')) hidePill(); }, true);
+  let closedFor = null, closedAt = 0;
+  document.addEventListener('pointerdown', (e) => { if (pill && !e.target.closest('.stk-pill')) { closedFor = pill._h; closedAt = Date.now(); hidePill(); } }, true);
   function bindTap(h, stk) { // one tap -> save option (delayed so a double-tap can still be the quick reaction)
     let last = 0, sx = 0, sy = 0;
     h.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; });
     h.addEventListener('click', (e) => {
       if (h.classList.contains('err') || Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) return;
       if (document.body.classList.contains('selecting') || document.querySelector('.ctx-menu.show')) return;
+      if (closedFor === h && Date.now() - closedAt < 700) { closedFor = null; return; } // the tap that closed the pill must not reopen it
       const now = Date.now(); // shown at once; a second tap (double-tap = reaction) hides it
       if (now - last < 350) { last = 0; hidePill(); return; }
       last = now; showPill(h, stk);
@@ -157,7 +159,7 @@
     });
   }
   async function registerBlob(blob, meta, onProg) { // -> {h,u,w,g,a}; uploads only when nobody ever uploaded these exact bytes
-    const db = C().db(), h = await sha256(await blob.arrayBuffer());
+    const db = C().db(), h = meta.h || await sha256(await blob.arrayBuffer());
     const norm = (r) => ({ h, u: r.u, w: r.w, g: r.g, a: r.a });
     try { const s = await tmo(db.ref('stickers/' + h).once('value'), 8000); if (s.val() && s.val().u) return norm(s.val()); } catch (e) {}
     const tok = await firebase.auth().currentUser.getIdToken();
@@ -195,6 +197,11 @@
     list.forEach((stk) => { const c = host(stk, 'stk-cell'); bindCell(c, stk, kind); s.grid.appendChild(c); });
   }
   const renderLib = () => { if (secs.recent) { fill('recent'); fill('saved'); } };
+  const isSaved = (h) => lib.saved.some((x) => x.h === h);
+  function toggle(stk) {
+    if (isSaved(stk.h)) return libRef('saved/' + stk.h).remove().then(() => C().toast('تمت الإزالة من المحفوظة', null, null, false, 1600)).catch(() => err('تعذرت الإزالة'));
+    return save(stk);
+  }
   function save(stk, quiet) {
     if (!C().online()) { err('الحفظ يتطلب اتصالًا بالإنترنت'); return Promise.resolve(); }
     return libRef('saved/' + stk.h).set(entry(stk)).then(() => { if (!quiet) C().toast('تم حفظ الملصق', null, null, false, 1600); }).catch(() => err('تعذر حفظ الملصق'));
@@ -274,11 +281,22 @@
   }
 
   // ---------------- helpers: file picking, overlay sheets ----------------
+  async function readBuf(b) { // picked files on Android can fail to read at random: retry, and try other read methods
+    let last;
+    for (let i = 0; i < 4; i++) {
+      const fns = [() => b.arrayBuffer(), () => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsArrayBuffer(b); }),
+        () => { const u = URL.createObjectURL(b); return fetch(u).then((r) => r.arrayBuffer()).finally(() => URL.revokeObjectURL(u)); }];
+      for (const fn of fns) { try { return await fn(); } catch (e) { last = e; } }
+      await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+    }
+    throw last;
+  }
+  let pickInput = null;
   function pickFiles(accept, multiple, cb) {
+    if (pickInput) { pickInput.remove(); pickInput = null; }
     const i = document.createElement('input'); i.type = 'file'; i.accept = accept; i.multiple = !!multiple; i.style.display = 'none';
-    i.onchange = () => { const f = Array.from(i.files || []); i.remove(); if (f.length) cb(f); };
-    i.addEventListener('cancel', () => i.remove());
-    document.body.appendChild(i); i.click();
+    i.onchange = () => { const f = Array.from(i.files || []); if (f.length) cb(f); }; // the input stays alive until the next pick: removing it early can invalidate the file
+    document.body.appendChild(i); pickInput = i; i.click();
   }
   function overlay(title, nav, onClose) {
     const o = el('div', 'stk-ov'), sh = el('div', 'stk-sheet'), hd = el('div', 'stk-hd'), x = el('button', 'stk-x');
@@ -328,8 +346,8 @@
     }
     return last || new Promise((r) => cv.toBlob(r, 'image/png'));
   }
-  async function sniff(f) { // real type from the first bytes: file names / mime types from phones are often wrong or empty
-    const u = new Uint8Array(await f.slice(0, 32).arrayBuffer()), s = (a, b) => String.fromCharCode.apply(null, u.slice(a, b));
+  function sniff(u, f) { // real type from the first bytes: file names / mime types from phones are often wrong or empty
+    const s = (a, b) => String.fromCharCode.apply(null, u.slice(a, b));
     if (s(0, 4) === 'GIF8') return { kind: 'gif', mime: 'image/gif' };
     if (s(0, 4) === 'RIFF' && s(8, 12) === 'WEBP') return { kind: 'webp', mime: 'image/webp', anim: s(12, 16) === 'VP8X' && !!(u[20] & 2) };
     if (u[0] === 0x89 && s(1, 4) === 'PNG') return { kind: 'png', mime: 'image/png' };
@@ -341,9 +359,12 @@
     return { kind: '', mime: '' };
   }
   async function openEditor(f0) {
-    const t = await sniff(f0), isVid = !!t.video; let file;
-    try { file = f0.size <= 30 * 1048576 ? new Blob([await f0.arrayBuffer()], { type: t.mime }) : f0.slice(0, f0.size, t.mime); } // copy into memory: picked files (Photos / cloud) can become unreadable later
-    catch (e) { return err('تعذرت قراءة الملف (ربما على التخزين السحابي). انسخه إلى جهازك ثم أعد المحاولة.'); }
+    let t, file, isVid;
+    try { // one read, straight away, into memory
+      const buf = f0.size <= 30 * 1048576 ? await readBuf(f0) : null;
+      t = sniff(buf ? new Uint8Array(buf, 0, Math.min(32, buf.byteLength)) : new Uint8Array(await readBuf(f0.slice(0, 32))), f0); isVid = !!t.video;
+      file = buf ? new Blob([buf], { type: t.mime }) : f0.slice(0, f0.size, t.mime);
+    } catch (e) { console.warn('read', e); return err('تعذرت قراءة الملف من جهازك. أعد اختياره (من «الملفات» أو المعرض)، أو انسخه إلى التخزين الداخلي.'); }
     const raw = t.kind === 'gif' || (t.kind === 'webp' && t.anim); // animated image: keep the original bytes (motion preserved)
     if (!t.mime) return err('هذا النوع من الملفات غير مدعوم. اختر صورة أو GIF أو فيديو.');
     if (raw && file.size > 6 * 1048576) return err('حجم الصورة المتحركة كبير (الحد 6MB). جرّب فيديو قصيرًا بدلًا منها.');
@@ -437,12 +458,12 @@
 
   // ---------------- WhatsApp import ----------------
   async function zipEntries(file) {
-    const tail = await file.slice(Math.max(0, file.size - 66000)).arrayBuffer(), dv = new DataView(tail);
+    const tail = await readBuf(file.slice(Math.max(0, file.size - 66000))), dv = new DataView(tail);
     let p = -1; for (let i = tail.byteLength - 22; i >= 0; i--) { if (dv.getUint32(i, true) === 0x06054b50) { p = i; break; } }
     if (p < 0) throw new Error('zip');
     const n = dv.getUint16(p + 10, true), cdSize = dv.getUint32(p + 12, true), cdOff = dv.getUint32(p + 16, true);
     if (cdOff === 0xFFFFFFFF || n === 0xFFFF) throw new Error('zip64');
-    const cd = new DataView(await file.slice(cdOff, cdOff + cdSize).arrayBuffer()), out = [], dec = new TextDecoder(); let o = 0;
+    const cd = new DataView(await readBuf(file.slice(cdOff, cdOff + cdSize))), out = [], dec = new TextDecoder(); let o = 0;
     for (let i = 0; i < n && o + 46 <= cd.byteLength; i++) {
       if (cd.getUint32(o, true) !== 0x02014b50) break;
       const nl = cd.getUint16(o + 28, true), el2 = cd.getUint16(o + 30, true), cl = cd.getUint16(o + 32, true);
@@ -452,7 +473,7 @@
     return out;
   }
   async function zipData(file, e) {
-    const lh = new DataView(await file.slice(e.lo, e.lo + 30).arrayBuffer()), s = e.lo + 30 + lh.getUint16(26, true) + lh.getUint16(28, true), raw = file.slice(s, s + e.csize);
+    const lh = new DataView(await readBuf(file.slice(e.lo, e.lo + 30))), s = e.lo + 30 + lh.getUint16(26, true) + lh.getUint16(28, true), raw = file.slice(s, s + e.csize);
     if (e.method === 0) return raw;
     if (e.method === 8) return new Response(raw.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
     throw new Error('method');
@@ -461,18 +482,23 @@
     const out = [], seen = new Set();
     const add = async (blob) => {
       if (out.length >= 400 || blob.size < 100 || blob.size > 1.5 * 1048576) return;
-      const buf = await blob.arrayBuffer(), u = new Uint8Array(buf);
+      const buf = await readBuf(blob), u = new Uint8Array(buf);
       const webp = String.fromCharCode(u[0], u[1], u[2], u[3]) === 'RIFF' && String.fromCharCode(u[8], u[9], u[10], u[11]) === 'WEBP', png = u[0] === 0x89 && u[1] === 0x50;
       if (!webp && !png) return;
       const h = await sha256(buf); if (seen.has(h)) return; seen.add(h);
       const b = blob.slice(0, blob.size, webp ? 'image/webp' : 'image/png'), url = URL.createObjectURL(b);
       let im; try { im = await loadImg(url); } catch (e) { URL.revokeObjectURL(url); return; }
       if (im.naturalWidth > 1024 || im.naturalHeight > 1024) { URL.revokeObjectURL(url); return; }
-      out.push({ h, blob: b, url, w: im.naturalWidth, g: im.naturalHeight, a: webp && String.fromCharCode(u[12], u[13], u[14], u[15]) === 'VP8X' && (u[20] & 2) ? 1 : 0 });
+      const cv = document.createElement('canvas'), kk = Math.min(1, 96 / Math.max(im.naturalWidth, im.naturalHeight));
+      cv.width = Math.max(1, Math.round(im.naturalWidth * kk)); cv.height = Math.max(1, Math.round(im.naturalHeight * kk));
+      cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+      const th = await new Promise((r) => cv.toBlob(r, 'image/webp', 0.7)); URL.revokeObjectURL(url);
+      out.push({ h, blob: b, url: th ? URL.createObjectURL(th) : '', w: im.naturalWidth, g: im.naturalHeight, a: webp && String.fromCharCode(u[12], u[13], u[14], u[15]) === 'VP8X' && (u[20] & 2) ? 1 : 0 });
       onProg(out.length);
+      if (out.length % 6 === 0) await new Promise((r) => setTimeout(r)); // let the page breathe
     };
     for (const f of files) {
-      const hd = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+      const hd = new Uint8Array(await readBuf(f.slice(0, 4)));
       if (hd[0] === 0x50 && hd[1] === 0x4b && hd[2] < 8) {
         const es = (await zipEntries(f)).filter((e) => /\.webp$/i.test(e.name) && e.usize > 100 && e.usize < 1.5 * 1048576);
         for (const e of es) { try { await add(await zipData(f, e)); } catch (er) {} }
@@ -511,7 +537,7 @@
       status.textContent = 'اختر الملصقات التي تريد استيرادها (ستجد هنا ما أرسلته وما استلمته).';
       intro.style.display = 'none'; O.sh.classList.add('has'); grid.textContent = ''; grid.style.display = ''; tools.style.display = ''; go.style.display = '';
       items.forEach((it) => {
-        const c = el('div', 'stk-icell'), im = el('img'); im.loading = 'lazy'; im.decoding = 'async'; im.src = it.url; im.alt = ''; c.appendChild(im);
+        const c = el('div', 'stk-icell'), im = el('img'); im.src = it.url; im.alt = ''; c.appendChild(im);
         c.onclick = () => { it.sel = !it.sel; c.classList.toggle('sel', it.sel); upd(); };
         grid.appendChild(c);
       });
@@ -551,5 +577,5 @@
     } catch (e) {}
   }
 
-  window.FRStickers = { boot, makeEl, save: (s) => save(s), panelOpened, panelClosed };
+  window.FRStickers = { boot, makeEl, save: (s) => save(s), toggle, isSaved, panelOpened, panelClosed };
 })();
