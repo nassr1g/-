@@ -111,8 +111,32 @@
     return h;
   }
   window.addEventListener('online', () => document.querySelectorAll('.stk-host.err').forEach(load));
+  let pill = null, pillT = null;
+  function hidePill() { clearTimeout(pillT); if (pill) { const p = pill; pill = null; p.classList.remove('show'); setTimeout(() => p.remove(), 220); } }
+  function showPill(h, stk) {
+    hidePill(); startLib();
+    const saved = lib.saved.some((x) => x.h === stk.h), p = el('button', 'stk-pill');
+    p.innerHTML = ico('<path d="M12 4l2.4 5 5.4.7-4 3.8 1 5.4L12 16.3 7.2 18.9l1-5.4-4-3.8 5.4-.7z"/>') + '<span>' + (saved ? 'إزالة من المحفوظة' : 'حفظ الملصق') + '</span>';
+    document.body.appendChild(p);
+    const r = h.getBoundingClientRect(), w = p.offsetWidth, ph = p.offsetHeight; let top = r.top - ph - 8; if (top < 70) top = r.bottom + 8;
+    p.style.top = Math.max(8, Math.min(top, innerHeight - ph - 8)) + 'px'; p.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, innerWidth - w - 8)) + 'px';
+    requestAnimationFrame(() => p.classList.add('show'));
+    p.onclick = () => { hidePill(); if (saved) libRef('saved/' + stk.h).remove().catch(() => err('تعذرت الإزالة')); else save(stk); };
+    pill = p; pillT = setTimeout(hidePill, 3500);
+  }
+  document.addEventListener('pointerdown', (e) => { if (pill && !e.target.closest('.stk-pill')) hidePill(); }, true);
+  function bindTap(h, stk) { // one tap -> save option (delayed so a double-tap can still be the quick reaction)
+    let tm = null, sx = 0, sy = 0;
+    h.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; });
+    h.addEventListener('click', (e) => {
+      if (h.classList.contains('err') || Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) return;
+      if (document.body.classList.contains('selecting') || document.querySelector('.ctx-menu.show')) return;
+      if (tm) { clearTimeout(tm); tm = null; return; }
+      tm = setTimeout(() => { tm = null; showPill(h, stk); }, 340);
+    });
+  }
   function makeEl(stk) {
-    const h = host(stk, 'stk-msg-host'), k = 168 / Math.max(stk.w || 1, stk.g || 1);
+    const h = host(stk, 'stk-msg-host'), k = 168 / Math.max(stk.w || 1, stk.g || 1); bindTap(h, stk);
     h.style.width = Math.max(60, Math.round(stk.w * k)) + 'px'; h.style.height = Math.max(60, Math.round(stk.g * k)) + 'px';
     return h;
   }
@@ -243,7 +267,7 @@
     $('panelSwitch').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && b.dataset.m !== mode) setMode(b.dataset.m, true); });
     bc.addEventListener('click', () => pickFiles('image/*,video/*', false, (f) => openEditor(f[0])));
     bi.addEventListener('click', () => openImport());
-    renderLib(); handleShared();
+    startLib(); renderLib(); handleShared();
   }
 
   // ---------------- helpers: file picking, overlay sheets ----------------
@@ -301,12 +325,24 @@
     }
     return last || new Promise((r) => cv.toBlob(r, 'image/png'));
   }
-  async function openEditor(file) {
-    const isVid = /^video\//.test(file.type), animWebp = file.type === 'image/webp' && await isAnimWebp(file).catch(() => false);
-    const raw = file.type === 'image/gif' || animWebp; // animated image: keep the original bytes (motion preserved)
-    if (raw && file.size > 2 * 1048576) return err('حجم الصورة المتحركة كبير (الحد 2MB). جرّب فيديو قصيرًا بدلًا منها.');
+  async function sniff(f) { // real type from the first bytes: file names / mime types from phones are often wrong or empty
+    const u = new Uint8Array(await f.slice(0, 32).arrayBuffer()), s = (a, b) => String.fromCharCode.apply(null, u.slice(a, b));
+    if (s(0, 4) === 'GIF8') return { kind: 'gif', mime: 'image/gif' };
+    if (s(0, 4) === 'RIFF' && s(8, 12) === 'WEBP') return { kind: 'webp', mime: 'image/webp', anim: s(12, 16) === 'VP8X' && !!(u[20] & 2) };
+    if (u[0] === 0x89 && s(1, 4) === 'PNG') return { kind: 'png', mime: 'image/png' };
+    if (u[0] === 0xFF && u[1] === 0xD8) return { kind: 'jpg', mime: 'image/jpeg' };
+    if (u[0] === 0x1A && u[1] === 0x45 && u[2] === 0xDF && u[3] === 0xA3) return { kind: 'vid', mime: 'video/webm', video: true };
+    if (s(4, 8) === 'ftyp') { const b = s(8, 12); if (/^(heic|heix|mif1|msf1|avif)/.test(b)) return { kind: 'heic', mime: '' }; return { kind: 'vid', mime: b === 'qt  ' ? 'video/quicktime' : 'video/mp4', video: true }; }
+    if (/^video\//.test(f.type)) return { kind: 'vid', mime: f.type, video: true };
+    if (/^image\//.test(f.type)) return { kind: 'img', mime: f.type };
+    return { kind: '', mime: '' };
+  }
+  async function openEditor(f0) {
+    const t = await sniff(f0), file = f0.slice(0, f0.size, t.mime), isVid = !!t.video;
+    const raw = t.kind === 'gif' || (t.kind === 'webp' && t.anim); // animated image: keep the original bytes (motion preserved)
+    if (!t.mime) return err('هذا النوع من الملفات غير مدعوم. اختر صورة أو GIF أو فيديو.');
+    if (raw && file.size > 6 * 1048576) return err('حجم الصورة المتحركة كبير (الحد 6MB). جرّب فيديو قصيرًا بدلًا منها.');
     if (isVid && file.size > 80 * 1048576) return err('الفيديو كبير جدًا (الحد 80MB)');
-    if (!isVid && !/^image\//.test(file.type)) return err('الملف المختار ليس صورة أو فيديو');
     const url = URL.createObjectURL(file);
     let stop = false, video = null, working = false;
     const O = overlay('إنشاء ملصق', 'stkedit', () => { stop = true; if (video) video.pause(); URL.revokeObjectURL(url); });
@@ -315,8 +351,8 @@
     let src, sw, sh, cv, ctx;
     try {
       if (isVid) {
-        video = document.createElement('video'); video.muted = true; video.loop = true; video.playsInline = true; video.setAttribute('playsinline', ''); video.src = url;
-        await new Promise((res, rej) => { video.onloadeddata = res; video.onerror = () => rej(new Error('v')); });
+        video = document.createElement('video'); video.muted = true; video.loop = true; video.playsInline = true; video.setAttribute('playsinline', ''); video.preload = 'auto'; video.src = url;
+        await new Promise((res, rej) => { const ok = () => { if (video.videoWidth) res(); }; video.onloadedmetadata = ok; video.onloadeddata = ok; video.oncanplay = ok; video.onerror = () => rej(new Error('v')); setTimeout(() => rej(new Error('timeout')), 12000); video.play().catch(() => {}); });
         src = video; sw = video.videoWidth; sh = video.videoHeight;
       } else { src = await loadImg(url); sw = src.naturalWidth; sh = src.naturalHeight; }
     } catch (e) { O.close(); return err('تعذر قراءة هذا الملف'); }
@@ -372,7 +408,7 @@
       if (!C().online()) { msg.textContent = 'إنشاء الملصق يتطلب اتصالًا بالإنترنت'; return; }
       working = true; busy(b, true); msg.textContent = ''; bar.style.display = ''; fill.style.width = '0';
       try {
-        const m = raw ? { blob: file, w: sw, g: sh, a: 1 } : isVid ? { blob: await recordVideo(), w: N, g: N, a: 2 } : { blob: await toWebp(cv), w: N, g: N, a: 0 };
+        const kk = Math.min(1, 2048 / Math.max(sw, sh)), m = raw ? { blob: file, w: Math.max(1, Math.round(sw * kk)), g: Math.max(1, Math.round(sh * kk)), a: 1 } : isVid ? { blob: await recordVideo(), w: N, g: N, a: 2 } : { blob: await toWebp(cv), w: N, g: N, a: 0 };
         const stk = await registerBlob(m.blob, m, (p) => { fill.style.width = Math.round(p * 100) + '%'; });
         await save(stk, true);
         if (send) sendSticker(stk); else C().toast('تم حفظ الملصق', null, null, false, 1600);
@@ -423,7 +459,8 @@
       onProg(out.length);
     };
     for (const f of files) {
-      if (/\.zip$/i.test(f.name) || /zip/.test(f.type)) {
+      const hd = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+      if (hd[0] === 0x50 && hd[1] === 0x4b && hd[2] < 8) {
         const es = (await zipEntries(f)).filter((e) => /\.webp$/i.test(e.name) && e.usize > 100 && e.usize < 1.5 * 1048576);
         for (const e of es) { try { await add(await zipData(f, e)); } catch (er) {} }
       } else await add(f);
@@ -434,12 +471,13 @@
     let items = [];
     const O = overlay('استيراد من WhatsApp', 'stkimp', () => items.forEach((i) => URL.revokeObjectURL(i.url)));
     const intro = el('div', 'stk-intro');
-    ['واتساب لا يسمح لأي موقع بقراءة مفضلتك أو أخيرتك مباشرة، فهذه أبسط طريقة ممكنة:',
-      '١) في واتساب افتح محادثة فيها ملصقاتك ← ⋮ ← المزيد ← تصدير المحادثة ← مع الوسائط.',
-      '٢) اختر «Friends\' Room» من قائمة المشاركة (بعد تثبيت الموقع على الشاشة الرئيسية)، أو احفظ الملف ثم اخترْه بالزر أدناه.',
-      '٣) ستظهر الملصقات فتختار ما تريد، ولا حاجة لفك الضغط. ويمكنك أيضًا اختيار ملفات ‎.webp‎ مباشرة.'
-    ].forEach((t, i) => intro.appendChild(el('p', i ? '' : 'lead', t)));
-    const pickB = btn('primary', 'اختيار ملف التصدير أو الملصقات');
+    [['lead', 'اتبع هذه الخطوات البسيطة:'],
+      ['', '١) أرسل الملصقات التي تريد استيرادها في محادثتك الخاصة (محادثتك مع نفسك).'],
+      ['', '٢) اضغط على النقاط الثلاث أعلى الدردشة ← المزيد ← نقل الدردشة، ثم اختر «مع الوسائط».'],
+      ['', '٣) اختر هذا الموقع من قائمة المشاركة.'],
+      ['note', 'لم يظهر الموقع في القائمة؟ احذف أيقونته من الشاشة الرئيسية ثم ثبّته من جديد وأعد المحاولة. أو احفظ الملف في جهازك ثم اخترْه بالزر أدناه (يُقبل حتى لو كان بدون امتداد).']
+    ].forEach((x) => intro.appendChild(el('p', x[0], x[1])));
+    const pickB = btn('primary', 'اختيار الملف المصدَّر');
     const status = el('div', 'stk-msgline'), grid = el('div', 'stk-igrid'), tools = el('div', 'stk-row'), go = btn('primary', 'استيراد المحدد');
     const bar = el('div', 'stk-bar'), fill = el('i'); bar.appendChild(fill); bar.style.display = 'none';
     grid.style.display = 'none'; tools.style.display = 'none'; go.style.display = 'none';
@@ -465,7 +503,7 @@
       });
       upd();
     }
-    pickB.onclick = () => pickFiles('.zip,.webp,application/zip,image/webp,image/png', true, run);
+    pickB.onclick = () => pickFiles('', true, run); // no filter: the exported file may have no extension
     all.onclick = () => { const on = sel().length !== items.length; items.forEach((i) => { i.sel = on; }); grid.querySelectorAll('.stk-icell').forEach((c, k) => c.classList.toggle('sel', items[k].sel)); upd(); };
     go.onclick = async () => {
       if (!C().online()) { status.textContent = 'الاستيراد يتطلب اتصالًا بالإنترنت'; return; }
