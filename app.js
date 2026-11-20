@@ -1729,7 +1729,10 @@
   }
 
   async function jumpToMessage(key) {
-    if (!allMessagesByKey.has(key)) { if (!(await ensureRendered(key))) return; }
+    if (!allMessagesByKey.has(key)) {
+      if (!(await ensureRendered(key))) return;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); // let the scroll fix-up of the prepended rows and the date dividers finish before measuring
+    }
     const entry = allMessagesByKey.get(key);
     if (!entry) return;
     // Scroll ONLY the messages container (scrollIntoView also scrolls the page
@@ -1737,7 +1740,7 @@
     const wrapRect = messagesWrap.getBoundingClientRect();
     const elRect = entry.el.getBoundingClientRect();
     const delta = (elRect.top + elRect.height / 2) - (wrapRect.top + wrapRect.height / 2);
-    messagesWrap.scrollBy({ top: delta, behavior: 'smooth' });
+    messagesWrap.scrollBy({ top: delta, behavior: Math.abs(delta) > messagesWrap.clientHeight * 3 ? 'auto' : 'smooth' }); // far jumps are instant (a long smooth scroll janks)
     const bubble = entry.el.querySelector('.msg-bubble');
     bubble.classList.remove('highlight');
     void bubble.offsetWidth;

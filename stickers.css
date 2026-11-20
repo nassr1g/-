@@ -161,3 +161,9 @@ mark.srch-hit { background: rgba(255,214,102,.3); color: #fff2c4; border-radius:
 @keyframes hitPulse { 0%, 100% { box-shadow: 0 0 0 1px rgba(255,214,102,.28); } 35% { box-shadow: 0 0 0 4px rgba(255,214,102,.55), 0 0 14px rgba(255,214,102,.5); } }
 .srch-empty { text-align: center; color: var(--text-3); font-size: 13px; line-height: 1.7; padding: 48px 20px; }
 .srch-empty.run { animation: connPulse 1.4s ease-in-out infinite; }
+
+/* trash icon + search highlight in the site's own colors (cyan -> pink glow), blinking 3x so it is easy to spot */
+.trash-ic { color: var(--danger); }
+mark.srch-hit { background: linear-gradient(135deg, rgba(95,241,224,.32), rgba(239,111,201,.36)); color: #fff; border-radius: 5px; padding: 0 2px; box-shadow: 0 0 0 1px rgba(95,241,224,.5), 0 0 8px rgba(95,241,224,.25); }
+.msg-bubble mark.srch-hit { animation: hitPulse .85s ease-in-out 3; }
+@keyframes hitPulse { 0%, 100% { box-shadow: 0 0 0 1px rgba(95,241,224,.5), 0 0 8px rgba(95,241,224,.25); background-color: transparent; } 50% { box-shadow: 0 0 0 3px rgba(95,241,224,.75), 0 0 18px rgba(239,111,201,.65); } }
