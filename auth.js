@@ -92,7 +92,7 @@ window.FRNav = (() => {
 
   // ---------------- small UI helpers ----------------
   const M = () => overlay.querySelector('.auth-pane.active [data-msg]');
-  function say(m, text, type) { if (!m) return; m.textContent = text || ''; m.className = 'amsg' + (type ? ' ' + type : ''); }
+  function say(m, text, type) { if (!m) return; m.textContent = text || ''; m.className = 'amsg' + (type ? ' ' + type : ''); if (text) { m.style.animation = 'none'; void m.offsetWidth; m.style.animation = ''; } }
   function busy(b, on) { b.classList.toggle('loading', on); b.disabled = on; }
   async function run(btn, fn, msg) {
     busy(btn, true);
@@ -575,7 +575,7 @@ window.FRNav = (() => {
       $('sePassOld').value = ''; $('sePassNew').value = ''; say($('sePassMsg'), 'تم تغيير كلمة المرور', 'ok');
     }, $('sePassMsg'));
     $('secDelete').onclick = () => run($('secDelete'), deleteAccount, $('seDelMsg'));
-    $('sessEndOthers').onclick = async () => {
+    if ($('sessEndOthers')) $('sessEndOthers').onclick = async () => {
       if (!isOnline()) return toast(OFFLINE_MSG);
       if (!(await askConfirm({ title: 'إنهاء الجلسات الأخرى', desc: 'سيتم تسجيل الخروج من كل الأجهزة الأخرى.', label: 'إنهاء الجلسات', danger: true }))) return;
       const s = (await db.ref('sessions/' + user.uid).once('value')).val() || {}, up = {};

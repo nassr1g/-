@@ -2639,6 +2639,7 @@
   function showToast(text, actionLabel, onAction, isErr, dur) {
     const old = document.querySelector('.app-toast');
     if (old) old.remove();
+    if (navigator.vibrate) navigator.vibrate(isErr ? [30, 50, 30] : 14); // a tiny buzz so the message is noticed
     const t = document.createElement('div');
     t.className = 'app-toast' + (isErr ? ' err' : '');
     const span = document.createElement('span');
@@ -2761,7 +2762,7 @@
   function exitSelect() {
     selectMode = false;
     document.body.classList.remove('selecting');
-    selectBar.classList.remove('show');
+    selectBar.classList.remove('show'); selectCopy.style.display = '';
     selected.forEach((k) => { const e = allMessagesByKey.get(k); if (e) e.el.classList.remove('selected'); });
     selected.clear();
   }
@@ -2771,10 +2772,11 @@
     if (selected.has(key)) { selected.delete(key); e.el.classList.remove('selected'); }
     else { selected.add(key); e.el.classList.add('selected'); }
     selectCount.textContent = selected.size ? 'تم تحديد ' + selected.size : '';
+    selectCopy.style.display = selected.size && [...selected].every((k) => { const x = allMessagesByKey.get(k); return x && x.data.sticker; }) ? 'none' : ''; // nothing to copy from stickers
     if (!selected.size) exitSelect();
   }
   function copySelected() {
-    const items = [...selected].map((k) => allMessagesByKey.get(k)).filter((e) => e && !e.data.deleted);
+    const items = [...selected].map((k) => allMessagesByKey.get(k)).filter((e) => e && !e.data.deleted && !e.data.sticker);
     if (!items.length) { exitSelect(); return; }
     items.sort((x, y) => (Number(x.data.timestamp) || 0) - (Number(y.data.timestamp) || 0)); // original order
     let text;
@@ -3244,6 +3246,28 @@
     const end = () => { if (!drag) return; drag = false; fs.classList.remove('drag'); armHide(); };
     thumb.addEventListener('pointerup', end); thumb.addEventListener('pointercancel', end);
     place();
+  })();
+
+  // ---------- floating date: shows the day of the top message while scrolling (like WhatsApp / Telegram) ----------
+  (function floatingDate() {
+    const pill = document.createElement('div'), lbl = document.createElement('span');
+    pill.className = 'float-date'; pill.appendChild(lbl); document.querySelector('.app').appendChild(pill);
+    let hideT = null, raf = 0, last = '', userT = 0;
+    const mark = () => { userT = Date.now(); };
+    const cur = () => {
+      raf = 0;
+      const top = messagesWrap.getBoundingClientRect().top + 14, kids = messagesList.children;
+      let lo = 0, hi = kids.length - 1, ans = -1;
+      while (lo <= hi) { const mid = (lo + hi) >> 1; if (kids[mid].getBoundingClientRect().bottom > top) { ans = mid; hi = mid - 1; } else lo = mid + 1; }
+      let el = ans < 0 ? null : kids[ans];
+      while (el && !el.classList.contains('msg-row')) el = el.nextElementSibling;
+      if (!el) return;
+      const text = dayLabel(Number(el.dataset.ts) || Date.now());
+      if (text !== last) { last = text; lbl.textContent = text; pill.classList.remove('tick'); void pill.offsetWidth; pill.classList.add('tick'); }
+      pill.classList.add('show'); clearTimeout(hideT); hideT = setTimeout(() => pill.classList.remove('show'), 1300);
+    };
+    [messagesWrap, $('fastScroll')].forEach((n) => n && ['touchstart', 'touchmove', 'touchend', 'wheel', 'pointerdown'].forEach((ev) => n.addEventListener(ev, mark, { passive: true })));
+    messagesWrap.addEventListener('scroll', () => { if (Date.now() - userT < 3000 && !raf) raf = requestAnimationFrame(cur); }, { passive: true });
   })();
 
   async function teardownForSignOut() {
