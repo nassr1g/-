@@ -3270,6 +3270,169 @@
     messagesWrap.addEventListener('scroll', () => { if (Date.now() - userT < 3000 && !raf) raf = requestAnimationFrame(cur); }, { passive: true });
   })();
 
+  // ---------- chat search (Telegram / WhatsApp style): results list + prev / next + highlighted matches ----------
+  (function chatSearch() {
+    const openBtn = $('searchChatBtn'); if (!openBtn) return;
+    const DIA = /[\u064B-\u065F\u0670\u0640]/;
+    const nch = (c) => { // same letter-folding as the mention search: diacritics dropped, alef / yaa / taa marbuta variants unified
+      if (DIA.test(c)) return '';
+      const l = c.toLowerCase();
+      if (l.length === 1) { if ('أإآٱ'.indexOf(l) >= 0) return 'ا'; if (l === 'ى' || l === 'ئ') return 'ي'; if (l === 'ة') return 'ه'; if (l === 'ؤ') return 'و'; }
+      return l;
+    };
+    function nmap(text) { // normalized text + the original offsets of every normalized char (so matches can be marked in the real text)
+      let s = '', idx = [], end = [], pos = 0;
+      for (const cp of text) { const n = nch(cp); for (let j = 0; j < n.length; j++) { s += n[j]; idx.push(pos); end.push(pos + cp.length); } pos += cp.length; }
+      return { s, idx, end };
+    }
+    const nstr = (t) => nmap(t).s;
+    function ranges(text, terms) {
+      const m = nmap(text), out = [];
+      terms.forEach((t) => { let i = 0; while (t && (i = m.s.indexOf(t, i)) >= 0) { out.push([m.idx[i], m.end[i + t.length - 1]]); i += t.length; } });
+      out.sort((a, b) => a[0] - b[0]);
+      const merged = [];
+      out.forEach((r) => { const l = merged[merged.length - 1]; if (l && r[0] <= l[1]) l[1] = Math.max(l[1], r[1]); else merged.push(r.slice()); });
+      return merged;
+    }
+    const I = {
+      x: '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>',
+      s: '<svg viewBox="0 0 24 24" width="18" height="18"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.9" fill="none"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+      u: '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 14l6-6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+      d: '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 10l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>'
+    };
+    const ui = document.createElement('div'); ui.className = 'srch';
+    ui.innerHTML = '<div class="srch-bar"><button class="srch-x" aria-label="إغلاق">' + I.x + '</button>'
+      + '<div class="srch-field">' + I.s + '<input type="text" enterkeyhint="search" placeholder="بحث في المحادثة" autocomplete="off" autocapitalize="none" maxlength="80"><button class="srch-clr" aria-label="مسح" style="display:none">' + I.x + '</button></div>'
+      + '<div class="srch-nav"><span class="srch-cnt"></span><button class="srch-up" aria-label="الأقدم">' + I.u + '</button><button class="srch-dn" aria-label="الأحدث">' + I.d + '</button></div></div>'
+      + '<div class="srch-res"><div class="srch-sum"></div><div class="srch-list"></div></div>';
+    document.querySelector('.app').appendChild(ui);
+    const q1 = (s) => ui.querySelector(s);
+    const input = q1('input'), cnt = q1('.srch-cnt'), up = q1('.srch-up'), dn = q1('.srch-dn'), clr = q1('.srch-clr'), sum = q1('.srch-sum'), list = q1('.srch-list');
+    let isOpen = false, corpus = null, loading = null, terms = [], results = [], cur = -1, mode = 'list', marks = [], tok = 0, gTok = 0, shown = 0, dT = null;
+
+    async function loadCorpus() { // every message saved on this device (older pages are read from IndexedDB in chunks)
+      const map = new Map();
+      const add = (m) => {
+        if (!m || m.deleted || m.pending || m.sticker || !m.text || isHiddenLocal(m.k, m)) return;
+        map.set(m.k, { k: m.k, ts: Number(m.timestamp) || 0, uid: m.senderUid, name: m.senderName, text: String(m.text), s: nstr(String(m.text)) });
+      };
+      let page = await Store.recent(500);
+      while (page.length && map.size < 80000) {
+        page.forEach(add);
+        const last = page[page.length - 1];
+        page = await Store.before(last.timestamp, last.k, 500);
+        await new Promise((r) => setTimeout(r));
+      }
+      allMessagesByKey.forEach((e, k) => add(Object.assign({ k }, e.data)));
+      return Array.from(map.values()).sort((a, b) => (b.ts - a.ts) || (a.k < b.k ? 1 : -1)); // newest first
+    }
+
+    function setMode(m) { mode = m; ui.classList.toggle('list', m === 'list'); updateNav(); }
+    function updateNav() {
+      const n = results.length;
+      cnt.textContent = !terms.length ? '' : (mode === 'nav' && cur >= 0) ? (cur + 1) + ' / ' + n : (n ? String(n) : '');
+      up.disabled = !n || (mode === 'nav' && cur >= n - 1);
+      dn.disabled = !n || (mode === 'nav' && cur <= 0);
+      clr.style.display = input.value ? '' : 'none';
+    }
+    const note = (text, cls) => { const d = document.createElement('div'); d.className = 'srch-empty' + (cls ? ' ' + cls : ''); d.textContent = text; return d; };
+    function snippet(r) {
+      const rg = ranges(r.text, terms), box = document.createElement('div'); box.className = 'srch-snip';
+      const first = rg[0] ? rg[0][0] : 0, from = Math.max(0, first - 36), to = Math.min(r.text.length, from + 120), tn = (t) => document.createTextNode(t.replace(/\s+/g, ' '));
+      let p = from; if (from > 0) box.appendChild(tn('… '));
+      rg.forEach((x) => {
+        if (x[1] <= from || x[0] >= to) return;
+        const a = Math.max(x[0], from), b = Math.min(x[1], to);
+        if (a > p) box.appendChild(tn(r.text.slice(p, a)));
+        const m = document.createElement('mark'); m.className = 'srch-hit'; m.textContent = r.text.slice(a, b); box.appendChild(m); p = b;
+      });
+      if (p < to) box.appendChild(tn(r.text.slice(p, to)));
+      if (to < r.text.length) box.appendChild(tn(' …'));
+      return box;
+    }
+    function item(i) {
+      const r = results[i], name = FRAuth.nameOf(r.uid, r.name), row = document.createElement('div');
+      row.className = 'srch-item'; row.style.animationDelay = ((i % 40) * 16) + 'ms';
+      const col = document.createElement('div'); col.className = 'srch-col';
+      const top = document.createElement('div'); top.className = 'srch-top';
+      const nm = document.createElement('span'); nm.className = 'srch-nm'; nm.textContent = name;
+      const tm = document.createElement('span'); tm.className = 'srch-tm'; tm.textContent = dayLabel(r.ts) + ' • ' + formatTime(r.ts);
+      top.appendChild(nm); top.appendChild(tm); col.appendChild(top); col.appendChild(snippet(r));
+      row.appendChild(FRAuth.mkAvatar(r.uid, name, 'sm')); row.appendChild(col);
+      row.addEventListener('click', () => go(i));
+      return row;
+    }
+    function more() { const end = Math.min(results.length, shown + 40); for (let i = shown; i < end; i++) list.appendChild(item(i)); shown = end; }
+    list.addEventListener('scroll', () => { if (shown < results.length && list.scrollHeight - list.scrollTop - list.clientHeight < 320) more(); }, { passive: true });
+    function renderList() {
+      list.textContent = ''; shown = 0; list.scrollTop = 0; sum.textContent = '';
+      if (!terms.length) list.appendChild(note('اكتب كلمة أو جملة للبحث في رسائل المحادثة المحفوظة على جهازك'));
+      else if (!results.length) list.appendChild(note('لا توجد نتائج مطابقة'));
+      else { sum.textContent = results.length + ' نتيجة'; more(); }
+      updateNav();
+    }
+    async function run() {
+      const my = ++tok, q = input.value.trim();
+      terms = q.split(/\s+/).map(nstr).filter(Boolean);
+      if (!terms.length) { results = []; cur = -1; setMode('list'); renderList(); return; }
+      if (!corpus) { list.textContent = ''; list.appendChild(note('جارٍ تجهيز البحث...', 'run')); await loading; if (my !== tok || !isOpen) return; }
+      results = corpus.filter((r) => terms.every((t) => r.s.indexOf(t) >= 0));
+      cur = -1; setMode('list'); renderList();
+    }
+
+    // ----- marks inside the real message bubble -----
+    function unmark() { marks.forEach((m) => { const p = m.parentNode; if (p) { p.replaceChild(document.createTextNode(m.textContent), m); p.normalize(); } }); marks = []; }
+    function markEl(root) {
+      const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement && n.parentElement.closest('.code-block')) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT }), nodes = [];
+      while (w.nextNode()) nodes.push(w.currentNode);
+      nodes.forEach((n) => {
+        const v = n.nodeValue, rg = ranges(v, terms); if (!rg.length) return;
+        const frag = document.createDocumentFragment(); let p = 0;
+        rg.forEach((x) => {
+          if (x[0] > p) frag.appendChild(document.createTextNode(v.slice(p, x[0])));
+          const m = document.createElement('mark'); m.className = 'srch-hit'; m.textContent = v.slice(x[0], x[1]); frag.appendChild(m); marks.push(m); p = x[1];
+        });
+        if (p < v.length) frag.appendChild(document.createTextNode(v.slice(p)));
+        n.parentNode.replaceChild(frag, n);
+      });
+    }
+    async function go(i) {
+      if (i < 0 || i >= results.length) return;
+      const my = ++gTok; cur = i; unmark(); setMode('nav'); input.blur();
+      pinnedToBottom = false; kbHold = 0; // keep the reading position where the result is, not at the bottom
+      const r = results[i];
+      await jumpToMessage(r.k);
+      if (my !== gTok || !isOpen) return;
+      const e = allMessagesByKey.get(r.k);
+      if (!e) { showToast('تعذر عرض هذه الرسالة', null, null, true); return; }
+      const t = e.el.querySelector('.msg-text'); if (t) markEl(t);
+    }
+
+    function openSearch() {
+      if (isOpen) return; isOpen = true;
+      if (emojiPanelOpen) closeEmojiPanel();
+      if (selectMode) exitSelect();
+      document.body.classList.add('searching');
+      input.value = ''; terms = []; results = []; cur = -1; corpus = null; setMode('list'); renderList();
+      ui.classList.add('on'); FRNav.push('search', hideSearch);
+      loading = loadCorpus().then((c) => { corpus = c; }, () => { corpus = []; });
+      setTimeout(() => { if (isOpen) input.focus(); }, 330);
+    }
+    function hideSearch() {
+      isOpen = false; tok++; gTok++; unmark(); input.blur(); clearTimeout(dT);
+      ui.classList.remove('on', 'list'); document.body.classList.remove('searching');
+      setTimeout(() => { if (!isOpen) { list.textContent = ''; results = []; corpus = null; } }, 450);
+    }
+    openBtn.addEventListener('click', () => { closeNotifSheet(); setTimeout(openSearch, 220); });
+    q1('.srch-x').addEventListener('click', () => FRNav.back('search'));
+    clr.addEventListener('click', () => { input.value = ''; run(); input.focus(); });
+    input.addEventListener('input', () => { updateNav(); clearTimeout(dT); dT = setTimeout(run, 170); });
+    input.addEventListener('focus', () => { if (terms.length && mode === 'nav') setMode('list'); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (results.length) go(mode === 'nav' ? Math.min(cur + 1, results.length - 1) : 0); } });
+    up.addEventListener('click', () => go(mode === 'nav' ? cur + 1 : 0)); // older
+    dn.addEventListener('click', () => go(mode === 'nav' ? cur - 1 : 0)); // newer
+  })();
+
   async function teardownForSignOut() {
     try { localStorage.removeItem(LS_DRAFT_KEY + myUid); } catch (e) {}
     if (!usersRef) return;
