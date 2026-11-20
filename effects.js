@@ -12,7 +12,7 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const C = () => window.FRChat || {};
   const SPL = '\\|\\|(?=\\S)([\\s\\S]*?\\S)\\|\\|';
-  const T = { fire: { n: 'ناري', e: '🔥' }, gift: { n: 'هدية', e: '🎁' }, ice: { n: 'ثلجي', e: '❄️' }, love: { n: 'حب', e: '💖' }, galaxy: { n: 'مجرة', e: '🌌' }, sakura: { n: 'ساكورا', e: '🌸' }, thunder: { n: 'صاعقة', e: '⚡' }, gold: { n: 'ذهبي', e: '✨' } };
+  const T = { fire: { n: 'ناري', e: '🔥' }, gift: { n: 'هدية', e: '🎁' }, ice: { n: 'ثلجي', e: '❄️' }, love: { n: 'قلوب', e: '💖' }, galaxy: { n: 'مجرة', e: '🌌' }, sakura: { n: 'ساكورا', e: '🌸' }, thunder: { n: 'صاعقة', e: '⚡' }, gold: { n: 'ذهبي', e: '✨' } };
   const PN = { fire: 7, ice: 9, love: 6, galaxy: 10, sakura: 6, thunder: 6, gold: 8, gift: 7 };
   const B = {
     fire: { g: ['●', '✹'], c: ['#ffb347', '#ff6a00', '#ffe08a'] },
