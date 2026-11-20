@@ -1061,14 +1061,15 @@
 
   // ---------- device -> Firebase: the outbox ----------
   function pendingData(r) {
-    return { text: r.text, senderUid: r.senderUid, senderName: r.senderName, timestamp: r.created, replyTo: r.replyTo, sticker: r.sticker, pending: true, state: r.state };
+    return { text: r.text, senderUid: r.senderUid, senderName: r.senderName, timestamp: r.created, replyTo: r.replyTo, sticker: r.sticker, fx: r.fx, pending: true, state: r.state };
   }
   function renderPending(r) { renderMessage(r.k, pendingData(r), true); }
 
-  async function queueMessage(text, sticker) {
+  async function queueMessage(text, sticker, fx) {
     const k = db.ref('chat/messages').push().key; // generated on the device: unique, time-ordered, works offline
     const rec = { k, text, senderUid: myUid, senderName: myName, created: Date.now(), state: 'pending', tries: 0 };
     if (sticker) rec.sticker = sticker;
+    if (fx) rec.fx = fx;
     if (activeReply) rec.replyTo = { key: activeReply.key, sender: activeReply.sender, text: activeReply.text.slice(0, 120) };
     cancelReply();
     outbox.set(k, rec); pendingKeys.add(k);
@@ -1110,6 +1111,7 @@
       const payload = { text: rec.text, senderUid: rec.senderUid, senderName: rec.senderName, timestamp: SV() };
       if (rec.replyTo) payload.replyTo = rec.replyTo;
       if (rec.sticker) payload.sticker = rec.sticker;
+      if (rec.fx) payload.fx = rec.fx;
       try { // message + a 'new message' record in the changes feed, in one atomic write
         await tmo(db.ref().update({ ['chat/messages/' + rec.k]: payload, ['chat/changes/n-' + rec.k]: { k: rec.k, t: 'n', ts: SV(), by: rec.senderUid } }), 15000);
       } catch (e0) { if (e0 && e0.code === 'PERMISSION_DENIED') await tmo(ref.set(payload), 15000); else throw e0; } // rules without the feed deployed yet
@@ -1466,6 +1468,7 @@
       attachDeletedGestures(row, key);
     }
 
+    if (!isDeleted && !data.sticker && window.FRFx) FRFx.after(row, bubble, key, data, mine);
     placeRow(row, data, prepend);
     allMessagesByKey.set(key, { data, el: row, pending: !!data.pending });
     welcomeCard.style.display = 'none';
@@ -1661,7 +1664,7 @@
 
       swapBubble(bubble, () => {
         bubble.innerHTML = '';
-        bubble.classList.remove('sticker-bubble');
+        bubble.classList.remove('sticker-bubble'); if (window.FRFx) FRFx.clear(bubble);
         if (bubble.parentElement) bubble.parentElement.classList.remove('stk-shell');
         bubble.classList.add('deleted');
         bubble.appendChild(trashGlyph());
@@ -1690,7 +1693,7 @@
       if (!bubble) return;
       const apply = () => {
         const textDiv = bubble.querySelector('.msg-text');
-        if (textDiv) setMsgText(textDiv, data.text);
+        if (textDiv) { setMsgText(textDiv, data.text); if (window.FRFx) FRFx.edited(textDiv, key); }
         if (!bubble.querySelector('.msg-edited-tag')) {
           const meta = bubble.querySelector('.msg-meta');
           const tag = document.createElement('span');
@@ -1703,7 +1706,7 @@
         swapBubble(bubble, apply, () => {
           bubble.classList.add('edit-glow');
           setTimeout(() => bubble.classList.remove('edit-glow'), 950);
-        }, { rich: (el) => setMsgText(el, data.text) });
+        }, { rich: (el) => { setMsgText(el, data.text); if (window.FRFx) FRFx.edited(el, key); } });
       } else if (!bubble._swapping) {
         apply();
       }
@@ -2069,7 +2072,7 @@
   function startReply(key, data) {
     data = (allMessagesByKey.get(key) || {}).data || data;
     cancelEdit();
-    activeReply = { key, sender: data.senderName || 'مجهول', text: data.text || '' };
+    activeReply = { key, sender: data.senderName || 'مجهول', text: window.FRFx ? FRFx.quote(data) : (data.text || '') };
     replyPreview.classList.remove('edit-mode');
     replyPreviewWho.textContent = activeReply.sender;
     replyPreviewTxt.textContent = activeReply.text;
@@ -2119,7 +2122,7 @@
   // ========================================================
   function sendMessage(focusAtPress) {
     const keepFocus = (typeof focusAtPress === 'boolean') ? focusAtPress : document.activeElement === messageInput;
-    const text = sanitizeMessage(messageInput.value).trim();
+    let text = sanitizeMessage(messageInput.value).trim();
     if (!text) return;
     if (!firebaseReady) { showSystemError('تعذر تهيئة الاتصال، أعد فتح الموقع.'); return; }
     if (editingKey && !requireOnline()) return; // editing needs the server: keep the text and the edit mode as they are
@@ -2144,7 +2147,9 @@
         .catch((err) => { console.error('edit error', err); restore(); showSystemError('تعذر تعديل الرسالة'); });
       return;
     }
-    queueMessage(text); // shows at once as "sending", delivered in order, never twice
+    let fx = '';
+    if (window.FRFx) { const o = FRFx.outgoing(text); text = o.text; fx = o.fx; }
+    queueMessage(text, null, fx); // shows at once as "sending", delivered in order, never twice
   }
   // Tapping the send button must not steal focus from the text box (keeps the keyboard open)
   // The send button never opens or closes the keyboard: it keeps focus where it was.
@@ -2338,7 +2343,7 @@
     autoGrow();
   }
 
-  function openEmojiPanel() { if (!emojiPanelOpen) FRNav.push('emoji', hideEmojiPanel); if (window.FRStickers) FRStickers.panelOpened(!!pendingReactionTargetKey); emojiPanel.classList.add('open'); emojiToggleBtn.classList.add('active'); emojiPanelOpen = true; updateComposerExpanded(); }
+  function openEmojiPanel() { if (window.FRFx) FRFx.closePanel(); if (!emojiPanelOpen) FRNav.push('emoji', hideEmojiPanel); if (window.FRStickers) FRStickers.panelOpened(!!pendingReactionTargetKey); emojiPanel.classList.add('open'); emojiToggleBtn.classList.add('active'); emojiPanelOpen = true; updateComposerExpanded(); }
   function closeEmojiPanel() { if (emojiPanelOpen) FRNav.back('emoji'); }
   function hideEmojiPanel() { if (window.FRStickers) FRStickers.panelClosed(); emojiPanel.classList.remove('open'); emojiToggleBtn.classList.remove('active'); emojiPanelOpen = false; pendingReactionTargetKey = null; updateComposerExpanded(); }
   emojiToggleBtn.addEventListener('click', () => { if (emojiPanelOpen) closeEmojiPanel(); else openEmojiPanel(); });
@@ -2551,7 +2556,7 @@
   // wide capsule while typing / emoji open / has text; narrower floating capsule at rest
   function updateComposerExpanded() {
     composerEl.classList.toggle('expanded',
-      document.activeElement === messageInput || emojiPanelOpen || !!messageInput.value.trim());
+      document.activeElement === messageInput || emojiPanelOpen || !!messageInput.value.trim() || (window.FRFx && FRFx.isOpen()));
   }
   messageInput.addEventListener('focus', updateComposerExpanded);
   messageInput.addEventListener('focus', () => { if (isNearBottom()) { pinnedToBottom = true; kbHold = Date.now() + 1100; } stickBottomSoon(); });
@@ -2622,6 +2627,7 @@
 
   function handleTap(e, key) {
     if (selectMode) { toggleSelect(key); return; }
+    if (window.FRFx && FRFx.tap(e, key)) return;
     if (!e.target.closest('.msg-bubble') || e.target.closest('.reply-quote, .reaction-chip')) { lastTap = { key: null, t: 0 }; return; }
     const now = Date.now();
     if (lastTap.key === key && now - lastTap.t < 320) {
@@ -3317,7 +3323,7 @@
       const map = new Map();
       const add = (m) => {
         if (!m || m.deleted || m.pending || m.sticker || !m.text || isHiddenLocal(m.k, m)) return;
-        map.set(m.k, { k: m.k, ts: Number(m.timestamp) || 0, uid: m.senderUid, name: m.senderName, text: String(m.text), s: nstr(String(m.text)) });
+        const tx = window.FRFx ? FRFx.search(m) : String(m.text); map.set(m.k, { k: m.k, ts: Number(m.timestamp) || 0, uid: m.senderUid, name: m.senderName, text: tx, s: nstr(tx) });
       };
       let page = await Store.recent(500);
       while (page.length && map.size < 80000) {
@@ -3450,7 +3456,7 @@
   // ========================================================
   // Init
   // ========================================================
-  window.FRChat = { sendSticker: (s) => queueMessage('ملصق', s), toast: showToast, sheet: openActionSheet, db: () => db, uid: () => myUid, online: () => !!(isConnected && firebaseReady) };
+  window.FRChat = { expand: () => updateComposerExpanded(), closeEmoji: () => closeEmojiPanel(), sendSticker: (s) => queueMessage('ملصق', s), toast: showToast, sheet: openActionSheet, db: () => db, uid: () => myUid, online: () => !!(isConnected && firebaseReady) };
 
   function init() {
     registerServiceWorker(); // offline shell + background sending: register as early as possible

@@ -196,14 +196,21 @@
       if (text[i] === '\n') i++;
     }
     if (any) { if (i < text.length) blocks.push({ type: 'text', v: text.slice(i) }); return blocks.filter((b) => b.type === 'code' || b.v.trim()); }
-    if (looksLikeCode(text)) return [{ type: 'code', v: text.replace(/^\n+/, '').replace(/\s+$/, ''), lang: detectLang(text, '') }];
+    if (looksLikeCode(text.replace(new RegExp(SPL_SRC, 'g'), '$1'))) return [{ type: 'code', v: text.replace(/^\n+/, '').replace(/\s+$/, ''), lang: detectLang(text, '') }];
     return [{ type: 'text', v: text }];
   }
 
   // ---------------------------------------------------------------- DOM
   const mk = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
-  function inline(parent, text, ctx) {
+  const SPL_SRC = '\\|\\|(?=\\S)([\\s\\S]*?\\S)\\|\\|';
+  function inline(parent, text, ctx, inSpl) {
+    if (!inSpl && text.indexOf('||') >= 0) {
+      const re = new RegExp(SPL_SRC, 'g'); let i = 0, m;
+      while ((m = re.exec(text))) { if (m.index > i) inline(parent, text.slice(i, m.index), ctx, true); const s = mk('span', 'spl'); inline(s, m[1], ctx, true); parent.appendChild(s); i = m.index + m[0].length; }
+      if (i < text.length) inline(parent, text.slice(i), ctx, true);
+      return;
+    }
     text.split(/(`[^`\n]{1,200}`)/).forEach((seg) => {
       if (!seg) return;
       if (seg.length > 2 && seg[0] === '`' && seg[seg.length - 1] === '`') { parent.appendChild(mk('code', 'ic', seg.slice(1, -1))); return; }

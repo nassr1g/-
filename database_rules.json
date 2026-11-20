@@ -96,6 +96,9 @@
           },
           "$other": {
             ".validate": false
+          },
+          "fx": {
+            ".validate": "newData.isString() && newData.val().matches(/^(fire|gift|ice|love|galaxy|sakura|thunder|gold)$/)"
           }
         }
       },

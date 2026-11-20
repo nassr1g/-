@@ -9,7 +9,7 @@ importScripts('/store.js');
 
 const CACHE = 'fr-shell-v1'; // (kept: bumping would drop the saved copies)
 const NET_TIMEOUT = 3500; // slow network -> fall back to the saved copy
-const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/rich.js', '/stickers.js', '/stickers.css', '/auth.js', '/app.js',
+const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/rich.js', '/stickers.js', '/stickers.css', '/effects.js', '/effects.css', '/auth.js', '/app.js',
   '/manifest.webmanifest', '/icons/app-icon-192.png', '/icons/app-icon-512.png', '/icons/apple-touch-icon.png'];
 const FIREBASE_JS = ['app', 'database', 'auth', 'messaging'].map((n) => 'https://www.gstatic.com/firebasejs/10.12.2/firebase-' + n + '-compat.js');
 const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600&display=swap';
@@ -130,6 +130,7 @@ async function flushOutboxBG() {
     const body = { text: rec.text, senderUid: rec.senderUid, senderName: rec.senderName, timestamp: { '.sv': 'timestamp' } };
     if (rec.replyTo) body.replyTo = rec.replyTo;
     if (rec.sticker) body.sticker = rec.sticker;
+    if (rec.fx) body.fx = rec.fx;
     const rootUrl = auth.dbUrl + '/.json?auth=' + encodeURIComponent(tok);        // message + 'new message' record of the changes feed, atomically
     let put = await fetch(rootUrl, { method: 'PATCH', body: JSON.stringify({ ['chat/messages/' + rec.k]: body, ['chat/changes/n-' + rec.k]: { k: rec.k, t: 'n', ts: { '.sv': 'timestamp' }, by: rec.senderUid } }) });
     if (!put.ok && put.status < 500) put = await fetch(url, { method: 'PUT', body: JSON.stringify(body) });   // rules without the feed deployed yet
