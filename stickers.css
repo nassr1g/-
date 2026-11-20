@@ -90,3 +90,8 @@
 .stk-foot { flex-shrink: 0; padding-top: 4px; }
 
 .stk-igrid { grid-auto-rows: min-content; }
+
+/* sticker + reply quote: the message is only as wide as the sticker, so it stays at the edge */
+.msg-bubble-shell.stk-shell { width: min-content; min-width: 96px; }
+.stk-shell .msg-sender { white-space: nowrap; }
+.stk-shell .reply-quote { max-width: 100%; }

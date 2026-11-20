@@ -833,34 +833,43 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSeen(); });
 
   // ---------- remote -> device ----------
-  let remoteQuery = null, healTries = 0, deniedShown = false;
+  let remoteQuery = null, healTries = 0, deniedShown = false, healBusy = false, readNoLimit = false, readBump = 0;
   function attachRemote(firstRun) {
     let q = messagesRef.orderByChild('timestamp');
-    q = firstRun ? q.startAt(historyFrom).limitToLast(INITIAL) : q.startAt(Math.max(msgCursor, historyFrom));
+    const from = historyFrom + readBump;
+    // Accounts that joined later (historyFrom > 0) read with a plain startAt: the rules only allow that exact query shape for them
+    q = firstRun ? ((historyFrom > 0 || readNoLimit) ? q.startAt(from) : q.startAt(from).limitToLast(INITIAL)) : q.startAt(Math.max(msgCursor, from));
     remoteQuery = q;
     q.on('child_added', queueRemote, onReadDenied);
     q.on('child_changed', queueRemote, onReadDenied);
     q.once('value', () => {
       syncLive = true;
+      if (firstRun && historyFrom > 0) { historyComplete = true; Store.setMeta('histDone', true); } // everything since joining is now on this device
       setTimeout(() => {
         if (firstOpen) { firstOpen = false; markNewestRead(); }          // first time on this device: everything counts as read
         if (bootAlign && !unreadSep) { bootAlign = false; bootHold = false; scheduleSeen(); } // nothing new: no frozen position
       }, 900);
     });
   }
-  function onReadDenied(err) { // the rules refused this query: re-read the join time from the server and retry
+  function onReadDenied(err) { // the rules refused this query: refresh the token / join time and retry with simpler queries
     console.warn('messages read refused', err && err.message);
-    if (healTries < 2) {
-      healTries++;
-      setTimeout(async () => {
-        try { if (remoteQuery) remoteQuery.off(); } catch (e) {}
-        historyFrom = await getHistoryFrom();
-        attachRemote(!msgCursor);
-      }, 700);
-    } else if (!deniedShown) {
-      deniedShown = true;
-      showToast('تعذر قراءة الرسائل بسبب الصلاحيات. حدّث الصفحة أو أعد تسجيل الدخول.', null, null, true, 8000);
+    if (healBusy) return;       // child_added / child_changed both report the same refusal
+    healBusy = true;
+    try { if (remoteQuery) remoteQuery.off(); } catch (e) {}
+    if (healTries >= 4) {
+      healBusy = false;
+      if (!deniedShown) { deniedShown = true; showToast('تعذر قراءة الرسائل بسبب الصلاحيات (' + historyFrom + '). حدّث الصفحة أو أعد تسجيل الدخول.', null, null, true, 9000); }
+      return;
     }
+    healTries++;
+    setTimeout(async () => {
+      try { const u = firebase.auth().currentUser; if (u) await tmo(u.getIdToken(true), 8000); } catch (e) {}
+      historyFrom = await getHistoryFrom();
+      readNoLimit = true;
+      readBump = healTries === 3 ? 1 : healTries >= 4 ? 1500 : 0; // last resorts, in case the join time and the query bound differ by a hair
+      healBusy = false;
+      attachRemote(!msgCursor);
+    }, 500 * healTries);
   }
   async function startRemoteSync() {
     historyFrom = await getHistoryFrom();
@@ -1004,6 +1013,7 @@
   }
   async function fetchOlderPage() {
     if (!isConnected || !firebaseReady || !historyReady) return [];
+    if (historyFrom > 0) { historyComplete = true; Store.setMeta('histDone', true); return []; } // nothing exists before the join time
     const oldest = await Store.oldest();
     if (!oldest) return [];
     let s;
@@ -1400,7 +1410,7 @@
       }
       const textDiv = document.createElement('div');
       textDiv.className = 'msg-text';
-      if (data.sticker && window.FRStickers) { bubble.classList.add('sticker-bubble'); textDiv.className = 'msg-stk'; textDiv.appendChild(FRStickers.makeEl(data.sticker)); }
+      if (data.sticker && window.FRStickers) { bubble.classList.add('sticker-bubble'); shell.classList.add('stk-shell'); textDiv.className = 'msg-stk'; textDiv.appendChild(FRStickers.makeEl(data.sticker)); }
       else setMsgText(textDiv, data.text);
       bubble.appendChild(textDiv);
       if (data.edited) {
@@ -1636,6 +1646,7 @@
       swapBubble(bubble, () => {
         bubble.innerHTML = '';
         bubble.classList.remove('sticker-bubble');
+        if (bubble.parentElement) bubble.parentElement.classList.remove('stk-shell');
         bubble.classList.add('deleted');
         bubble.appendChild(trashGlyph());
         const textDiv = document.createElement('div');
