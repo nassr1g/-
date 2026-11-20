@@ -33,6 +33,10 @@ async function deliver(db, messages, tokens) {
   return { sent: result.successCount, failed: result.failureCount };
 }
 
+const FXL = { fire: 'ناري 🔥', gift: 'هدية 🎁', ice: 'ثلجي ❄️', love: 'حب 💖', galaxy: 'مجرة 🌌', sakura: 'ساكورا 🌸', thunder: 'صاعقة ⚡', gold: 'ذهبي ✨' };
+const SPLG = /\|\|(?=\S)([\s\S]*?\S)\|\|/g;
+const hide = (s) => String(s || '').replace(SPLG, '••••');
+const fxText = (msg) => FXL[msg.fx] ? 'أرسل لك رسالة في قالب "' + FXL[msg.fx] + '"' : null;
 const MEN = /(^|[\s(\[{«"'،؛:!?؟—\-])@([A-Za-z0-9_]{3,20})(?![A-Za-z0-9_@])/g;
 async function mentionedUids(db, text) {
   const names = new Set(); let m; MEN.lastIndex = 0;
@@ -73,7 +77,7 @@ async function handleMessage(db, key, uid) {
       type: isReply ? 'reply' : (isMention ? 'mention' : 'message'),
       key,
       sender: String(msg.senderName || '').slice(0, 20),
-      text: String(msg.text || '').slice(0, 180),
+      text: (fxText(msg) || hide(msg.text)).slice(0, 180),
       ts: String(msg.timestamp)
     }));
   });
@@ -106,7 +110,7 @@ async function handleReaction(db, key, uid, emoji) {
       key,
       sender: String(rec.name || '').slice(0, 20),
       emoji,
-      text: String(msg.text || '').slice(0, 80),
+      text: FXL[msg.fx] ? 'رسالة في قالب ' + FXL[msg.fx] : hide(msg.text).slice(0, 80),
       ts: String(rec.ts)
     }));
   });
