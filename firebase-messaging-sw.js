@@ -130,7 +130,10 @@ async function flushOutboxBG() {
     const body = { text: rec.text, senderUid: rec.senderUid, senderName: rec.senderName, timestamp: { '.sv': 'timestamp' } };
     if (rec.replyTo) body.replyTo = rec.replyTo;
     if (rec.sticker) body.sticker = rec.sticker;
-    const put = await fetch(url, { method: 'PUT', body: JSON.stringify(body) });   // network error -> throws -> browser retries the sync
+    const rootUrl = auth.dbUrl + '/.json?auth=' + encodeURIComponent(tok);        // message + 'new message' record of the changes feed, atomically
+    let put = await fetch(rootUrl, { method: 'PATCH', body: JSON.stringify({ ['chat/messages/' + rec.k]: body, ['chat/changes/n-' + rec.k]: { k: rec.k, t: 'n', ts: { '.sv': 'timestamp' }, by: rec.senderUid } }) });
+    if (!put.ok && put.status < 500) put = await fetch(url, { method: 'PUT', body: JSON.stringify(body) });   // rules without the feed deployed yet
+    // network error -> throws -> browser retries the sync
     if (put.status >= 500) throw new Error('server');
     let data = null;
     if (put.ok || put.status === 401 || put.status === 403) {

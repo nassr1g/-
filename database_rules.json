@@ -100,13 +100,13 @@
         }
       },
       "changes": {
-        ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists() && (!root.child('users/'+auth.uid+'/hf').exists() || (query.orderByChild === 'ts' && query.startAt >= root.child('users/'+auth.uid+'/hf').val()))",
+        ".read": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists()",
         ".indexOn": [
           "ts"
         ],
         "$cid": {
           ".write": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').exists() && !data.exists() && newData.exists()",
-          ".validate": "newData.hasChildren(['k','t','ts','by']) && newData.child('by').val() === auth.uid && (newData.child('t').val() === 'd' || newData.child('t').val() === 'e' || newData.child('t').val() === 'r')",
+          ".validate": "newData.hasChildren(['k','t','ts','by']) && newData.child('by').val() === auth.uid && (newData.child('t').val() === 'd' || newData.child('t').val() === 'e' || newData.child('t').val() === 'r' || newData.child('t').val() === 'n')",
           "k": {
             ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
           },

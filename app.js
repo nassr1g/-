@@ -833,6 +833,7 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSeen(); });
 
   // ---------- remote -> device ----------
+  let feedMode = false; // accounts that joined later (hf > 0) receive messages through the changes feed + per-message reads
   let remoteQuery = null, healTries = 0, deniedShown = false, healBusy = false, readNoLimit = false, readBump = 0;
   function attachRemote(firstRun) {
     let q = messagesRef.orderByChild('timestamp');
@@ -874,7 +875,8 @@
   async function startRemoteSync() {
     historyFrom = await getHistoryFrom();
     historyReady = true;
-    attachRemote(!msgCursor);
+    feedMode = historyFrom > 0;
+    if (feedMode) { historyComplete = true; Store.setMeta('histDone', true); } else attachRemote(!msgCursor);
     if (isConnected) startChangesFeed();
   }
 
@@ -951,16 +953,27 @@
   function startChangesFeed() {
     if (feedStarted || !historyReady || !firebaseReady) return;
     feedStarted = true;
-    if (!chgCursor) chgCursor = serverNow() - 60000;
-    changesRef.orderByChild('ts').startAt(Math.max(chgCursor, historyFrom)).on('child_added', (s) => onChange(s.val()));
+    if (!chgCursor) chgCursor = feedMode ? historyFrom : serverNow() - 60000;
+    const q = changesRef.orderByChild('ts').startAt(Math.max(chgCursor, historyFrom));
+    q.on('child_added', (s) => onChange(s.val()), (e) => {
+      console.warn('changes read refused', e && e.message);
+      if (feedMode && !deniedShown) { deniedShown = true; showToast('تعذر قراءة الرسائل بسبب الصلاحيات. تأكد من نشر قواعد قاعدة البيانات ثم حدّث الصفحة.', null, null, true, 9000); }
+    });
+    if (feedMode) q.once('value', () => setTimeout(() => { // first catch-up done: from now on arrivals are live (sound / scroll)
+      syncLive = true;
+      setTimeout(() => {
+        if (firstOpen) { firstOpen = false; markNewestRead(); }
+        if (bootAlign && !unreadSep) { bootAlign = false; bootHold = false; scheduleSeen(); }
+      }, 900);
+    }, 2500));
   }
-  const chgQ = new Set(); let chgTimer = null;
+  const chgQ = new Set(), chgNew = new Set(); let chgTimer = null;
   function onChange(c) {
     if (!c || !c.k) return;
     if (c.ts > chgCursor) { chgCursor = c.ts; persistCursors(); }
-    if (c.by === myUid) return;                                                // my own changes are applied locally
+    if (c.by === myUid && !(feedMode && c.t === 'n')) return; // (a message I sent from another device still has to arrive)                                                // my own changes are applied locally
     if (lastEvt.has(c.k) && Date.now() - lastEvt.get(c.k) < 4000) return;     // already delivered live
-    chgQ.add(c.k);
+    chgQ.add(c.k); if (feedMode && c.t === 'n') chgNew.add(c.k);
     if (!chgTimer) chgTimer = setTimeout(runChanges, 150);
   }
   async function runChanges() {
@@ -968,7 +981,8 @@
     const keys = Array.from(chgQ); chgQ.clear();
     for (let i = 0; i < keys.length; i += 5) {
       await Promise.all(keys.slice(i, i + 5).map(async (k) => {
-        if (!(await Store.get(k))) return;           // not on this device -> a later download will already include the change
+        if (chgNew.delete(k)) { if (allMessagesByKey.has(k) || pendingKeys.has(k)) return; } // a new message: always fetch it
+        else if (!(await Store.get(k))) return;           // not on this device -> a later download will already include the change
         try { const s = await tmo(messagesRef.child(k).once('value'), 15000); const d = s.val(); if (d) queueRemote({ key: k, val: () => d }); } catch (e) {}
       }));
     }
@@ -1096,7 +1110,9 @@
       const payload = { text: rec.text, senderUid: rec.senderUid, senderName: rec.senderName, timestamp: SV() };
       if (rec.replyTo) payload.replyTo = rec.replyTo;
       if (rec.sticker) payload.sticker = rec.sticker;
-      await tmo(ref.set(payload), 15000);
+      try { // message + a 'new message' record in the changes feed, in one atomic write
+        await tmo(db.ref().update({ ['chat/messages/' + rec.k]: payload, ['chat/changes/n-' + rec.k]: { k: rec.k, t: 'n', ts: SV(), by: rec.senderUid } }), 15000);
+      } catch (e0) { if (e0 && e0.code === 'PERMISSION_DENIED') await tmo(ref.set(payload), 15000); else throw e0; } // rules without the feed deployed yet
       const s = await tmo(ref.once('value'), 10000); // answered from the local cache
       return await confirmSent(rec, s.val() || Object.assign({}, payload, { timestamp: serverNow() }));
     } catch (e) {
@@ -1104,7 +1120,7 @@
         // same key written twice is refused by the rules -> it may simply have been delivered earlier
         let s = null;
         try { s = await tmo(ref.once('value'), 10000); } catch (e2) { if (!(e2 && e2.code === 'PERMISSION_DENIED')) return 'retry'; }
-        if (s && s.exists()) return await confirmSent(rec, s.val());
+        if (s && s.exists()) { db.ref('chat/changes/n-' + rec.k).set({ k: rec.k, t: 'n', ts: SV(), by: rec.senderUid }).catch(() => {}); return await confirmSent(rec, s.val()); }
         rec.tries = (rec.tries || 0) + 1;
         if (rec.tries >= 2) { markFailed(rec); return 'failed'; }
         return 'retry';
