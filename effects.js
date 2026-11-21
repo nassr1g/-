@@ -109,79 +109,78 @@
     }
   }
 
-  // ---------- real fire: one shared canvas particle engine (additive blending -> one connected, living flame) ----------
+  // ---------- real fire: WebGL shader (fbm turbulence + heat colour ramp) -> one connected, living flame ----------
   const Fire = (() => {
-    const COL = ['255,250,205', '255,222,110', '255,170,40', '255,105,15', '215,45,0', '120,15,0'];
-    let spr = null, raf = 0, last = 0; const act = new Set();
-    const sprites = () => spr || (spr = COL.map((c) => {
-      const cv = document.createElement('canvas'); cv.width = cv.height = 48; const x = cv.getContext('2d'), g = x.createRadialGradient(24, 24, 0, 24, 24, 24);
-      g.addColorStop(0, 'rgba(' + c + ',1)'); g.addColorStop(.4, 'rgba(' + c + ',.5)'); g.addColorStop(1, 'rgba(' + c + ',0)'); x.fillStyle = g; x.fillRect(0, 0, 48, 48); return cv;
-    }));
+    const VS = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
+    const HEAD = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n'
+      + 'uniform vec2 uRes;uniform vec4 uBox;uniform float uT,uH,uI,uR,uF;\n'
+      + 'float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}\n'
+      + 'float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}\n'
+      + 'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.02+vec2(11.7,5.3);a*=.5;}return v;}\n'
+      + 'vec4 ramp(float f,float I){vec3 c=mix(vec3(.5,.04,0.),vec3(1.,.36,.03),smoothstep(0.,.35,f));c=mix(c,vec3(1.,.74,.16),smoothstep(.35,.72,f));c=mix(c,vec3(1.,.96,.78),smoothstep(.86,1.,f));float a=smoothstep(.04,.32,f)*I;return vec4(c*a,a);}\n'
+      + 'float turb(vec2 px){float w=fbm(vec2(px.x*.02*uF,px.y*.02*uF-uT*.6));vec2 p=vec2(px.x*.075*uF+w*1.4,px.y*.04*uF+uT*2.6);return fbm(p)*.65+fbm(p*2.1+vec2(3.,-uT*1.3))*.35;}\n';
+    const FS = {
+      rect: HEAD + 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);vec2 c=uBox.xy+uBox.zw*.5,h=uBox.zw*.5;vec2 q=abs(px-c)-h+uR;float d=length(max(q,0.))+min(max(q.x,q.y),0.)-uR;'
+        + 'float up=clamp((c.y-px.y)/max(length(px-c),1.),-1.,1.)*.5+.5;float hm=mix(.1,1.,up*up);float t=max(d,0.)/(uH*hm);'
+        + 'float f=clamp((1.-t)*1.1+(turb(px)-.5)*1.9,0.,1.);if(d<0.)f*=smoothstep(-10.,0.,d);gl_FragColor=ramp(f,uI);}',
+      screen: HEAD + 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);float t=min((uRes.y-px.y)/uH,min(px.x/(uH*.35),(uRes.x-px.x)/(uH*.35)));'
+        + 'float f=clamp((1.-t)*.95+(turb(px)-.5)*1.9,0.,1.);gl_FragColor=ramp(f,uI);}'
+    };
+    let raf = 0, last = 0; const act = new Set();
+    function glInit(cv, mode) {
+      const gl = cv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false }); if (!gl) return null;
+      const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); return gl.getShaderParameter(x, gl.COMPILE_STATUS) ? x : null; };
+      const v = sh(gl.VERTEX_SHADER, VS), f = sh(gl.FRAGMENT_SHADER, FS[mode]); if (!v || !f) return null;
+      const pr = gl.createProgram(); gl.attachShader(pr, v); gl.attachShader(pr, f); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
+      gl.useProgram(pr); const bf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      const l = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
+      const u = {}; ['uRes', 'uBox', 'uT', 'uH', 'uI', 'uR', 'uF'].forEach((n) => { u[n] = gl.getUniformLocation(pr, n); });
+      return { gl, u };
+    }
     function loop(now) {
       raf = 0; if (!act.size) return;
       const dt = Math.min(.05, (now - last) / 1000 || .016); last = now;
-      act.forEach((e) => { if (!e.cv.isConnected) { act.delete(e); return; } e.step(dt); });
-      raf = requestAnimationFrame(loop);
+      act.forEach((e) => { if (!e.cv.isConnected) { e.setOn(false); return; } e.step(dt); });
+      if (act.size) raf = requestAnimationFrame(loop);
     }
     function make(cv, o) {
-      const ctx = cv.getContext('2d'), e = { cv, o, w: 0, h: 0, parts: [], t: 0, acc: 0, on: false, boost: 0, box: null,
-        size(w, h) { cv.width = w; cv.height = h; e.w = w; e.h = h; },
+      const e = { cv, o, w: 0, h: 0, t: 0, on: false, boost: 0, box: null, g: null,
+        size(w, h) { e.cv.width = w; e.cv.height = h; e.w = w; e.h = h; },
         setOn(v) {
-          if (v === e.on || (v && act.size >= 6)) return; e.on = v;
-          if (v) { act.add(e); if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); } }
-          else { act.delete(e); ctx.clearRect(0, 0, e.w, e.h); e.parts.length = 0; }
+          if (v === e.on) return;
+          if (v) {
+            if (act.size >= 6) return; e.g = glInit(e.cv, o.mode); if (!e.g) return;
+            e.on = true; e.t = Math.random() * 40; act.add(e); if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); }
+          } else {
+            e.on = false; act.delete(e);
+            if (e.g) { const x = e.g.gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); e.g = null; const n = e.cv.cloneNode(false); e.cv.replaceWith(n); e.cv = n; }
+          }
         },
         step(dt) {
-          e.t += dt; const S = sprites(), env = o.env ? o.env(e.t) : 1; if (e.boost > 0) e.boost -= dt;
-          e.acc += o.rate * env * (e.boost > 0 ? 2.6 : 1) * dt; let n = e.acc | 0; e.acc -= n;
-          while (n-- > 0 && e.parts.length < o.max) e.parts.push(o.spawn(e));
-          ctx.globalCompositeOperation = 'source-over'; ctx.clearRect(0, 0, e.w, e.h); ctx.globalCompositeOperation = 'lighter';
-          const P = e.parts;
-          for (let i = P.length - 1; i >= 0; i--) {
-            const p = P[i]; p.age += dt;
-            if (p.age >= p.life) { P[i] = P[P.length - 1]; P.pop(); continue; }
-            const a = p.age / p.life; p.x += (p.vx + Math.sin(e.t * 7 + p.ph) * p.sw) * dt; p.y += p.vy * dt;
-            const s = p.s * (1 - .6 * a) * 2; ctx.globalAlpha = Math.min(1, (1 - a) * 1.4) * p.al;
-            ctx.drawImage(S[p.fix != null ? p.fix : Math.min(5, (a * 5.2) | 0)], p.x - s / 2, p.y - s / 2, s, s);
-          }
-          ctx.globalAlpha = 1;
+          const g = e.g; if (!g) return; const gl = g.gl, u = g.u; e.t += dt; if (e.boost > 0) e.boost -= dt;
+          const b = e.box || { x: 0, y: 0, w: 0, h: 0 };
+          gl.viewport(0, 0, e.w, e.h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.uniform2f(u.uRes, e.w, e.h); gl.uniform4f(u.uBox, b.x, b.y, b.w, b.h); gl.uniform1f(u.uT, e.t);
+          gl.uniform1f(u.uH, o.H * (e.boost > 0 ? 1.3 : 1)); gl.uniform1f(u.uI, o.env ? o.env(e.t) : 1); gl.uniform1f(u.uR, o.R || 0); gl.uniform1f(u.uF, o.F || 1);
+          gl.drawArrays(gl.TRIANGLES, 0, 3);
         } };
       return e;
     }
     return { make };
   })();
-  const tongue = (x, t) => .5 + .5 * Math.sin(x * .045 + t * 3.2) * Math.sin(x * .021 - t * 2.1 + 1.3);
-  function spawnRect(e) {
-    const o = e.o, b = e.box, t = e.t, u = Math.random(); let x, y, side;
-    if (u < o.wt) { x = b.x + rnd(0, b.w); y = b.y + 3; side = 0; }
-    else if (u < o.wl) { x = b.x + 3; y = b.y + rnd(b.h * .1, b.h); side = 1; }
-    else if (u < o.wr) { x = b.x + b.w - 3; y = b.y + rnd(b.h * .1, b.h); side = 2; }
-    else { x = b.x + rnd(b.w * .08, b.w * .92); y = b.y + b.h - 4; side = 3; }
-    const n = side === 0 ? tongue(x, t) : tongue(y * 1.7 + side * 40, t), spark = Math.random() < .035;
-    const rise = (side === 3 ? 26 : (side ? .62 : 1) * (62 + 96 * n)) * o.k * rnd(.8, 1.2);
-    return { x, y, vx: (side === 1 ? -rnd(4, 22) : side === 2 ? rnd(4, 22) : rnd(-8, 8)) * o.k * 1.6, vy: -rise * (spark ? 1.6 : 1), age: 0,
-      life: spark ? rnd(.9, 1.5) : (side === 3 ? rnd(.25, .4) : (.5 + .55 * n) * rnd(.85, 1.15)), s: spark ? o.s * .28 : o.s * rnd(.75, 1.25) * (.7 + .6 * n),
-      ph: Math.random() * 6.28, sw: rnd(8, 22) * o.k * 1.4, fix: spark ? 1 : null, al: spark ? 1 : .9 };
-  }
-  function spawnScreen(e) {
-    const W = e.w, H = e.h, u = Math.random(); let x, y, side;
-    if (u < .6) { x = rnd(0, W); y = H + 6; side = 0; } else if (u < .8) { x = -4; y = rnd(H * .2, H); side = 1; } else { x = W + 4; y = rnd(H * .2, H); side = 2; }
-    const n = tongue(x * 1.2 + side * 80, e.t);
-    return { x, y, vx: side === 1 ? rnd(4, 30) : side === 2 ? -rnd(4, 30) : rnd(-12, 12), vy: -(side ? 160 + 120 * n : 220 + 300 * n) * rnd(.8, 1.2), age: 0,
-      life: side ? .6 + .5 * n : .7 + .7 * n, s: side ? rnd(18, 34) : rnd(26, 50) * (.7 + .6 * n), ph: Math.random() * 6.28, sw: rnd(10, 30), fix: null, al: .9 };
-  }
   const demoFires = [], fro = 'ResizeObserver' in window ? new ResizeObserver((es) => es.forEach((x) => { if (x.target._fe) x.target._fe.resize(); })) : null;
   function attachFire(host, row, bar) {
     const cv = mk('canvas', 'fxc'); host.appendChild(cv);
-    const P = bar ? { pl: 22, pt: 100, pr: 22, pb: 4, k: .5, s: 15, wt: .7, wl: .85, wr: 1, max: 240 } : { pl: 30, pt: 72, pr: 30, pb: 14, k: .45, s: 11, wt: .5, wl: .7, wr: .9, max: 170 };
-    const e = Fire.make(cv, Object.assign({ spawn: spawnRect, rate: 60 }, P));
+    const P = bar ? { pl: 30, pt: 135, pr: 30, pb: 22, H: 92, R: 28 } : { pl: 34, pt: 90, pr: 34, pb: 20, H: 62, R: 17 };
+    const e = Fire.make(cv, { mode: 'rect', H: P.H, R: P.R, F: 1 });
     e.resize = () => {
       const w = host.offsetWidth, h = host.offsetHeight; if (!w || !h) return;
-      e.size(w + P.pl + P.pr, h + P.pt + P.pb); cv.style.cssText = 'left:' + (-P.pl) + 'px;top:' + (-P.pt) + 'px;width:' + e.w + 'px;height:' + e.h + 'px';
-      e.box = { x: P.pl, y: P.pt, w, h }; e.o.rate = bar ? (w + 2 * h) * .3 : 2 * (w + h) * .26;
+      e.size(w + P.pl + P.pr, h + P.pt + P.pb); e.cv.style.cssText = 'left:' + (-P.pl) + 'px;top:' + (-P.pt) + 'px;width:' + e.w + 'px;height:' + e.h + 'px';
+      e.box = { x: P.pl, y: P.pt, w, h };
     };
-    const base = e.setOn; e.setOn = (v) => { if (v && !e.box) e.resize(); if (e.box) base(v); };
-    host._fe = e; if (row) row._fire = e; if (fro) fro.observe(host); else e.resize(); e.cv = cv; return e;
+    const base = e.setOn; e.setOn = (v) => { if (v) e.resize(); if (v && !e.box) return; base(v); };
+    host._fe = e; if (row) row._fire = e; if (fro) fro.observe(host);
+    return e;
   }
 
   // ---------- full-screen effects (sender + live receiver) ----------
@@ -201,8 +200,8 @@
   const SC = {
     fire: { ms: 3400, f(el, W, H) {
       const cv = mk('canvas', 'sc-cv'); el.appendChild(cv);
-      const e = Fire.make(cv, { spawn: spawnScreen, rate: 300, max: 300, env: (t) => t < .35 ? t / .35 : t > 2.7 ? Math.max(0, (3.3 - t) / .6) : 1 });
-      e.size(W, H); el._fire = e; e.setOn(true);
+      const e = Fire.make(cv, { mode: 'screen', H: H * .5 * .22, F: .55, env: (t) => t < .35 ? t / .35 : t > 2.7 ? Math.max(0, (3.3 - t) / .6) : 1 });
+      e.size(Math.round(W * .5), Math.round(H * .5)); el._fire = e; e.setOn(true);
     } },
     thunder: { ms: 1900, f(el, W, H) {
       el.appendChild(mk('div', 'sc-dark')); el.appendChild(mk('div', 'sc-flash'));
