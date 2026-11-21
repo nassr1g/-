@@ -33,7 +33,7 @@ async function deliver(db, messages, tokens) {
   return { sent: result.successCount, failed: result.failureCount };
 }
 
-const FXL = { fire: 'ناري 🔥', gift: 'هدية 🎁', ice: 'ثلجي ❄️', love: 'قلوب 💖', galaxy: 'مجرة 🌌', sakura: 'ساكورا 🌸', thunder: 'صاعقة ⚡', gold: 'ذهبي ✨' };
+const FXL = { fire: 'ناري 🔥', gift: 'هدية 🎁', ice: 'ثلجي ❄️', love: 'حب 💖', galaxy: 'مجرة 🌌', sakura: 'ساكورا 🌸', thunder: 'صاعقة ⚡', gold: 'ذهبي ✨' };
 const SPLG = /\|\|(?=\S)([\s\S]*?\S)\|\|/g;
 const hide = (s) => String(s || '').replace(SPLG, '••••');
 const fxText = (msg) => FXL[msg.fx] ? 'أرسل لك رسالة في قالب "' + FXL[msg.fx] + '"' : null;
@@ -118,6 +118,7 @@ async function handleReaction(db, key, uid, emoji) {
 }
 
 module.exports = async (req, res) => {
+  return res.status(200).json({ paused: true });
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
   try {
     init();
