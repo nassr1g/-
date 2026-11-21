@@ -248,5 +248,5 @@
 /* ===== v4: canvas fire ===== */
 .fxc { position: absolute; pointer-events: none; z-index: -1; }
 .sc-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
-.msg-row.fxo-row { margin-top: 62px; }
-.fx-tile[data-fx="fire"] .fx-stage { padding-top: 74px; }
+.msg-row.fxo-row { margin-top: 40px; }
+.fx-tile[data-fx="fire"] .fx-stage { padding-top: 50px; }

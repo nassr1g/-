@@ -117,13 +117,13 @@
       + 'float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}\n'
       + 'float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}\n'
       + 'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.02+vec2(11.7,5.3);a*=.5;}return v;}\n'
-      + 'vec4 ramp(float f,float I){vec3 c=mix(vec3(.5,.04,0.),vec3(1.,.36,.03),smoothstep(0.,.35,f));c=mix(c,vec3(1.,.74,.16),smoothstep(.35,.72,f));c=mix(c,vec3(1.,.96,.78),smoothstep(.86,1.,f));float a=smoothstep(.04,.32,f)*I;return vec4(c*a,a);}\n'
+      + 'vec4 ramp(float f,float I){vec3 c=mix(vec3(.5,.04,0.),vec3(1.,.36,.03),smoothstep(0.,.35,f));c=mix(c,vec3(1.,.74,.16),smoothstep(.35,.72,f));c=mix(c,vec3(1.,.96,.78),smoothstep(.93,1.,f));float a=smoothstep(.06,.34,f)*I*.9;return vec4(c*a,a);}\n'
       + 'float turb(vec2 px){float w=fbm(vec2(px.x*.02*uF,px.y*.02*uF-uT*.6));vec2 p=vec2(px.x*.075*uF+w*1.4,px.y*.04*uF+uT*2.6);return fbm(p)*.65+fbm(p*2.1+vec2(3.,-uT*1.3))*.35;}\n';
     const FS = {
       rect: HEAD + 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);vec2 c=uBox.xy+uBox.zw*.5,h=uBox.zw*.5;vec2 q=abs(px-c)-h+uR;float d=length(max(q,0.))+min(max(q.x,q.y),0.)-uR;'
-        + 'float up=clamp((c.y-px.y)/max(length(px-c),1.),-1.,1.)*.5+.5;float hm=mix(.1,1.,up*up);float t=max(d,0.)/(uH*hm);'
-        + 'float f=clamp((1.-t)*1.1+(turb(px)-.5)*1.9,0.,1.);if(d<0.)f*=smoothstep(-10.,0.,d);gl_FragColor=ramp(f,uI);}',
-      screen: HEAD + 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);float t=min((uRes.y-px.y)/uH,min(px.x/(uH*.35),(uRes.x-px.x)/(uH*.35)));'
+        + 'float up=clamp((c.y-px.y)/max(length(px-c),1.),-1.,1.)*.5+.5;float hm=mix(.04,1.,up*up*up);float t=max(d,0.)/(uH*hm);'
+        + 'float f=clamp((1.-t)*.95+(turb(px)-.5)*1.9,0.,1.);if(d<0.)f*=smoothstep(-10.,0.,d);gl_FragColor=ramp(f,uI);}',
+      screen: HEAD + 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);float t=min((uRes.y-px.y)/uH,min(px.x/(uH*.3),(uRes.x-px.x)/(uH*.3)));'
         + 'float f=clamp((1.-t)*.95+(turb(px)-.5)*1.9,0.,1.);gl_FragColor=ramp(f,uI);}'
     };
     let raf = 0, last = 0; const act = new Set();
@@ -171,7 +171,7 @@
   const demoFires = [], fro = 'ResizeObserver' in window ? new ResizeObserver((es) => es.forEach((x) => { if (x.target._fe) x.target._fe.resize(); })) : null;
   function attachFire(host, row, bar) {
     const cv = mk('canvas', 'fxc'); host.appendChild(cv);
-    const P = bar ? { pl: 30, pt: 135, pr: 30, pb: 22, H: 92, R: 28 } : { pl: 34, pt: 90, pr: 34, pb: 20, H: 62, R: 17 };
+    const P = bar ? { pl: 24, pt: 80, pr: 24, pb: 16, H: 48, R: 28 } : { pl: 24, pt: 56, pr: 24, pb: 14, H: 34, R: 17 };
     const e = Fire.make(cv, { mode: 'rect', H: P.H, R: P.R, F: 1 });
     e.resize = () => {
       const w = host.offsetWidth, h = host.offsetHeight; if (!w || !h) return;
@@ -200,7 +200,7 @@
   const SC = {
     fire: { ms: 3400, f(el, W, H) {
       const cv = mk('canvas', 'sc-cv'); el.appendChild(cv);
-      const e = Fire.make(cv, { mode: 'screen', H: H * .5 * .22, F: .55, env: (t) => t < .35 ? t / .35 : t > 2.7 ? Math.max(0, (3.3 - t) / .6) : 1 });
+      const e = Fire.make(cv, { mode: 'screen', H: H * .5 * .11, F: .55, env: (t) => t < .35 ? t / .35 : t > 2.7 ? Math.max(0, (3.3 - t) / .6) : 1 });
       e.size(Math.round(W * .5), Math.round(H * .5)); el._fire = e; e.setOn(true);
     } },
     thunder: { ms: 1900, f(el, W, H) {
