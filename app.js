@@ -438,7 +438,6 @@
     startReceipts();
     listenForEvents();
     initNotifications();
-    watchAdmin();
     if (window.FRStickers) FRStickers.boot();
 
     if (isFreshJoin) {
@@ -3042,18 +3041,6 @@
     updateNotifUI();
     if (chatTonesOn) playSound('send');
   });
-
-  // ---------- admin: pause push notifications for everybody ----------
-  let adminUser = '', pushOff = false;
-  function watchAdmin() {
-    const btn = $('pushOffToggle'); if (!btn) return;
-    const draw = () => { const me = myLower(); btn.style.display = (me && me === adminUser) ? 'flex' : 'none'; btn.classList.toggle('on', pushOff); };
-    db.ref('config').on('value', (s) => { const v = s.val() || {}; adminUser = String(v.adminUsername || '').toLowerCase(); pushOff = v.pushOff === true; draw(); }, () => {});
-    btn.addEventListener('click', () => {
-      if (!requireOnline()) return;
-      db.ref('config/pushOff').set(!pushOff).catch(() => showSystemError('تعذر تغيير الحالة'));
-    });
-  }
 
   // ---------- Install prompt (our own, dismissible) ----------
   function installDismissed() { return installBannerHidden; }

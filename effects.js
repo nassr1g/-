@@ -109,6 +109,36 @@
     }
   }
 
+  // ---------- real flames: curved tongues that burn out of the edges ----------
+  const FO = 'M45 124C18 124 6 104 10 82C13 66 24 58 26 42C27 34 24 24 30 14C32 24 40 28 42 18C43 12 41 6 46 0C48 14 58 22 66 36C74 48 84 62 82 84C80 108 66 124 45 124Z';
+  const FI = 'M45 122C30 122 24 108 28 94C31 84 38 80 40 68C46 76 54 82 58 94C62 108 56 122 45 122Z';
+  let defsOk = false;
+  function ensureDefs() {
+    if (defsOk) return; defsOk = true;
+    const d = document.createElement('div'); d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+    d.innerHTML = '<svg width="0" height="0"><defs><linearGradient id="fxgA" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff4d00"/><stop offset=".5" stop-color="#ff9a1a"/><stop offset="1" stop-color="#ffd45e"/></linearGradient>'
+      + '<linearGradient id="fxgB" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffc23d"/><stop offset="1" stop-color="#fff3c4"/></linearGradient>'
+      + '<linearGradient id="fxgR" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#c81e00"/><stop offset="1" stop-color="#ff6a12"/></linearGradient>'
+      + '<symbol id="fxF" viewBox="0 0 90 124"><path d="' + FO + '" fill="url(#fxgA)"/><path d="' + FI + '" fill="url(#fxgB)"/></symbol>'
+      + '<symbol id="fxR" viewBox="0 0 90 124"><path d="' + FO + '" fill="url(#fxgR)"/></symbol></defs></svg>';
+    document.body.appendChild(d);
+  }
+  function fl(parent, x, y, h, r) {
+    const e = document.createElement('span'); e.className = 'fl';
+    e.innerHTML = '<svg viewBox="0 0 90 124" class="bk"><use href="#fxR"/></svg><svg viewBox="0 0 90 124"><use href="#fxF"/></svg>';
+    e.style.cssText = '--x:' + x + ';--y:' + y + ';--h:' + h.toFixed(0) + 'px;--w:' + (h * .73).toFixed(0) + 'px;--r:' + r + 'deg;--t:' + rnd(.45, .9).toFixed(2) + 's;--d:-' + rnd(0, .9).toFixed(2) + 's';
+    parent.appendChild(e);
+  }
+  const BUB = [[8, 34, -10], [19, 24, 6], [47, 26, -2], [76, 40, -4], [90, 56, 6], [97, 28, 16]];
+  const BAR = [[4, 40, -8], [12, 26, 5], [22, 20, -3], [34, 24, 2], [47, 34, -3], [53, 48, 4], [62, 26, -5], [74, 30, 3], [86, 38, -4], [94, 54, 5], [99, 28, 12]];
+  function burn(o, bar) {
+    ensureDefs();
+    (bar ? BAR : BUB).forEach((a) => fl(o, a[0] + '%', '5px', a[1], a[2]));
+    if (bar) { fl(o, '4px', '45%', 34, -80); fl(o, 'calc(100% - 4px)', '45%', 34, 80); }
+    else { fl(o, '3px', '42%', 30, -78); fl(o, 'calc(100% - 3px)', '36%', 26, 80); }
+    flames(o, 0, 0, 0, bar ? 8 : 5);
+  }
+
   // ---------- full-screen effects (sender + live receiver) ----------
   const NS = 'http://www.w3.org/2000/svg'; let scEl = null, scT = null;
   function rain(el, n, fn) {
@@ -125,8 +155,11 @@
   }
   const SC = {
     fire: { ms: 3400, f(el, W, H) {
-      const m = (cls, n, a, b, sp, w) => { const o = mk('div', 'fxo2 ' + cls), g = mk('div', 'fg'); flames(g, n, a, b, sp); o.appendChild(g); if (w) o.style.width = w + 'px'; el.appendChild(o); };
-      m('', 16, 50, 100, 16); m('sl', 9, 22, 40, 0, H); m('sr', 9, 22, 40, 0, H);
+      const m = (cls, w) => { const o = mk('div', 'fxo2 ' + cls), g = mk('div', 'fg'); if (w) o.style.width = w + 'px'; o.appendChild(g); el.appendChild(o); return g; };
+      ensureDefs(); const b = m('', 0), l = m('sl', H), r = m('sr', H);
+      for (let i = 0; i < 14; i++) fl(b, ((i + .5) / 14 * 100 + rnd(-3, 3)).toFixed(1) + '%', '0px', rnd(120, 230), rnd(-6, 6));
+      [l, r].forEach((g) => { for (let i = 0; i < 8; i++) fl(g, ((i + .5) / 8 * 100 + rnd(-3, 3)).toFixed(1) + '%', '0px', rnd(60, 110), rnd(-8, 8)); });
+      flames(b, 0, 0, 0, 16);
     } },
     thunder: { ms: 1900, f(el, W, H) {
       el.appendChild(mk('div', 'sc-dark')); el.appendChild(mk('div', 'sc-flash'));
@@ -167,7 +200,7 @@
     bubble.classList.add('fx'); bubble.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); bubble.insertBefore(f, bubble.firstChild);
     if (k === 'gift') { bubble.insertBefore(cover(), f.nextSibling); if (mine || opened.has(key)) bubble.classList.add('opened'); }
-    if (k === 'fire') { const o = mk('div', 'fxo'); flames(o, 9, 16, 28, 5); bubble.appendChild(o); row.classList.add('fxo-row'); }
+    if (k === 'fire') { const o = mk('div', 'fxo'); burn(o, false); bubble.appendChild(o); row.classList.add('fxo-row'); }
     watch(row);
   }
   function tap(e, key) {
@@ -200,7 +233,7 @@
   let outer = null, cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
 
   function applyComposer() {
-    if (cur === 'fire' && !outer) { outer = mk('div', 'fxo fxo-c'); flames(outer, 14, 18, 34, 8); glass.appendChild(outer); }
+    if (cur === 'fire' && !outer) { outer = mk('div', 'fxo fxo-c'); burn(outer, true); glass.appendChild(outer); }
     else if (cur !== 'fire' && outer) { const o = outer; outer = null; o.classList.add('out'); setTimeout(() => o.remove(), 450); }
     if (cur) {
       glass.dataset.fx = cur;
@@ -263,7 +296,7 @@
     const b = mk('div', 'msg-bubble fx'); b.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); b.appendChild(f);
     if (k === 'gift') b.appendChild(cover());
-    if (k === 'fire') { const o = mk('div', 'fxo'); flames(o, 7, 14, 24, 4); b.appendChild(o); }
+    if (k === 'fire') { const o = mk('div', 'fxo'); burn(o, false); b.appendChild(o); }
     b.appendChild(mk('div', 'msg-text', 'مرحبًا بك'));
     return b;
   }
