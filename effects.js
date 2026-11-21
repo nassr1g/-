@@ -73,7 +73,7 @@
     b.classList.remove('fx-hit'); void b.offsetWidth; b.classList.add('fx-hit');
     clearTimeout(b._ht); b._ht = setTimeout(() => b.classList.remove('fx-hit'), 650);
   }
-  function cover() { const c = mk('div', 'gift-cover'); c.innerHTML = GIFT + '<span>اضغط لفتح الهدية</span>'; return c; }
+  function cover() { const c = mk('div', 'gift-cover'); c.innerHTML = GIFT; return c; }
 
   function openGift(b, key) {
     if (b.classList.contains('opened') || b._og) return;
@@ -83,7 +83,7 @@
     c.classList.add('opening'); if (navigator.vibrate) navigator.vibrate([18, 40, 26]);
     setTimeout(() => {
       const w0 = b.offsetWidth, h0 = b.offsetHeight;
-      b.classList.add('opened', 'revealing', 'flash');
+      b.classList.add('opened', 'revealing', 'flash'); screen('gift');
       const w1 = b.offsetWidth, h1 = b.offsetHeight;
       b.style.overflow = 'hidden'; b.style.width = w0 + 'px'; b.style.height = h0 + 'px'; void b.offsetWidth;
       b.style.transition = 'width .5s cubic-bezier(.2,.8,.3,1), height .5s cubic-bezier(.2,.8,.3,1)';
@@ -94,6 +94,71 @@
     }, 560);
   }
 
+
+  // ---------- real flames (outside the frame) ----------
+  function flames(el, n, a, b, sp) {
+    for (let i = 0; i < n; i++) {
+      const f = document.createElement('i'), x = (i + 0.5) / n * 100 + rnd(-3, 3);
+      f.style.cssText = '--x:' + x.toFixed(1) + '%;--w:' + rnd(a, b).toFixed(0) + 'px;--t:' + rnd(.35, .7).toFixed(2) + 's;--d:-' + rnd(0, .7).toFixed(2) + 's';
+      el.appendChild(f);
+    }
+    for (let i = 0; i < sp; i++) {
+      const s = document.createElement('b');
+      s.style.cssText = '--x:' + rnd(5, 95).toFixed(0) + '%;--dx:' + rnd(-16, 16).toFixed(0) + 'px;--t:' + rnd(1, 2).toFixed(2) + 's;--d:-' + rnd(0, 2).toFixed(2) + 's';
+      el.appendChild(s);
+    }
+  }
+
+  // ---------- full-screen effects (sender + live receiver) ----------
+  const NS = 'http://www.w3.org/2000/svg'; let scEl = null, scT = null;
+  function rain(el, n, fn) {
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement('i');
+      p.style.cssText = '--x:' + rnd(0, 100).toFixed(1) + '%;--dx:' + rnd(-60, 60).toFixed(0) + 'px;--t:' + rnd(1.6, 3).toFixed(2) + 's;--d:' + rnd(0, 1).toFixed(2) + 's;--s:' + rnd(4, 10).toFixed(1) + 'px';
+      if (fn) fn(p, i); el.appendChild(p);
+    }
+  }
+  const zig = (x, len, dr) => { const p = [[x, 0]]; let y = 0; while (y < len) { y += rnd(len * .07, len * .14); x += rnd(-dr, dr); p.push([x, y]); } return p; };
+  function bolt(g, pts) {
+    const d = 'M' + pts.map((q) => q[0].toFixed(0) + ' ' + q[1].toFixed(0)).join('L');
+    ['b1', 'b2', 'b3'].forEach((c) => { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); p.setAttribute('class', c); g.appendChild(p); });
+  }
+  const SC = {
+    fire: { ms: 3400, f(el, W, H) {
+      const m = (cls, n, a, b, sp, w) => { const o = mk('div', 'fxo2 ' + cls), g = mk('div', 'fg'); flames(g, n, a, b, sp); o.appendChild(g); if (w) o.style.width = w + 'px'; el.appendChild(o); };
+      m('', 16, 50, 100, 16); m('sl', 9, 22, 40, 0, H); m('sr', 9, 22, 40, 0, H);
+    } },
+    thunder: { ms: 1900, f(el, W, H) {
+      el.appendChild(mk('div', 'sc-dark')); el.appendChild(mk('div', 'sc-flash'));
+      const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      [[rnd(.12, .4) * W, 0], [rnd(.6, .88) * W, .5]].forEach(([x0, d]) => {
+        const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'bolt'); g.style.animationDelay = d + 's';
+        const pts = zig(x0, H * rnd(.5, .72), W * .07); bolt(g, pts);
+        const m = pts[Math.floor(pts.length / 2)], br = zig(m[0], H * .22, W * .06).map((q) => [q[0] + (Math.random() < .5 ? 1 : -1) * q[1] * .5, q[1] + m[1]]); bolt(g, br);
+        svg.appendChild(g);
+      });
+      el.appendChild(svg);
+    } },
+    ice: { ms: 4200, f(el) { rain(el, 46, (p, i) => { if (i % 6 === 0) { p.className = 'g'; p.style.setProperty('--s', rnd(12, 20).toFixed(0) + 'px'); } }); } },
+    love: { ms: 3800, f(el) { rain(el, 26, (p, i) => { p.style.setProperty('--s', rnd(14, 30).toFixed(0) + 'px'); p.style.setProperty('--c', ['#ff7eb6', '#ff4d8d', '#ffc2dc', '#ef6fc9'][i % 4]); }); } },
+    galaxy: { ms: 3300, f(el, W) {
+      el.style.setProperty('--mx', (W * .7) + 'px'); el.style.setProperty('--my', (W * .37) + 'px');
+      for (let i = 0; i < 8; i++) { const b = document.createElement('b'); b.style.cssText = '--x:' + rnd(-10, 60).toFixed(0) + '%;--y:' + rnd(0, 55).toFixed(0) + '%;--l:' + rnd(90, 170).toFixed(0) + 'px;--d:' + (i * .28 + rnd(0, .2)).toFixed(2) + 's'; el.appendChild(b); }
+      for (let i = 0; i < 18; i++) { const s = document.createElement('i'); s.style.cssText = '--x:' + rnd(0, 100).toFixed(0) + '%;--y:' + rnd(0, 100).toFixed(0) + '%;--d:' + rnd(0, 1.6).toFixed(2) + 's'; el.appendChild(s); }
+    } },
+    sakura: { ms: 4600, f(el) { rain(el, 28, (p) => { p.style.setProperty('--s', rnd(10, 18).toFixed(0) + 'px'); p.style.setProperty('--t', rnd(2.2, 3.6).toFixed(2) + 's'); }); } },
+    gold: { ms: 3600, f(el) { rain(el, 34, (p, i) => { p.style.setProperty('--s', rnd(8, 16).toFixed(0) + 'px'); if (i % 3 === 0) p.className = 'g'; }); } },
+    gift: { ms: 3600, f(el) { rain(el, 44, (p, i) => { p.style.setProperty('--c', ['#ff4d6d', '#ffd166', '#5ff1e0', '#c9a6ec', '#fff', '#ff8a3d'][i % 6]); p.style.setProperty('--s', rnd(7, 13).toFixed(0) + 'px'); }); } }
+  };
+  function screen(k) {
+    const d = SC[k]; if (!d || document.visibilityState !== 'visible' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const app = document.querySelector('.app'); if (!app) return;
+    if (scEl) { scEl.remove(); clearTimeout(scT); }
+    const el = mk('div', 'fx-screen sc-' + k), W = app.clientWidth, H = app.clientHeight;
+    el.style.setProperty('--H', (H + 50) + 'px'); d.f(el, W, H); app.appendChild(el); scEl = el;
+    scT = setTimeout(() => { el.classList.add('out'); setTimeout(() => { el.remove(); if (scEl === el) scEl = null; }, 500); }, d.ms);
+  }
+
   // ---------- hooks used by app.js ----------
   function after(row, bubble, key, data, mine) {
     index(bubble, key);
@@ -102,6 +167,7 @@
     bubble.classList.add('fx'); bubble.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); bubble.insertBefore(f, bubble.firstChild);
     if (k === 'gift') { bubble.insertBefore(cover(), f.nextSibling); if (mine || opened.has(key)) bubble.classList.add('opened'); }
+    if (k === 'fire') { const o = mk('div', 'fxo'); flames(o, 9, 16, 28, 5); bubble.appendChild(o); row.classList.add('fxo-row'); }
     watch(row);
   }
   function tap(e, key) {
@@ -123,7 +189,7 @@
   function edited(textEl, key) { opened.forEach((v) => { if (v.indexOf(key + ':') === 0) opened.delete(v); }); index(textEl, key); watch(textEl.closest('.msg-row')); }
   function clear(b) {
     b.classList.remove('fx', 'opened', 'opening', 'fx-hit', 'revealing', 'flash'); delete b.dataset.fx;
-    const r = b.closest('.msg-row'); if (r) r.classList.remove('fxwatch', 'fx-live');
+    const r = b.closest('.msg-row'); if (r) r.classList.remove('fxwatch', 'fx-live', 'fxo-row');
   }
   const quote = (d) => d.fx === 'gift' ? 'رسالة في قالب هدية 🎁' : mask(d.text);
   const search = (m) => (m.fx === 'gift' && !opened.has(m.k) && m.senderUid !== (C().uid && C().uid())) ? 'رسالة في قالب هدية' : mask(m.text);
@@ -131,9 +197,11 @@
   // ---------- composer: state + panel ----------
   const glass = document.querySelector('.composer-glass'), input = $('messageInput'), btn = $('fxToggleBtn'), panel = $('fxPanel'), chipsEl = $('fxChips');
   const ph0 = input ? input.placeholder : '';
-  let cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
+  let outer = null, cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
 
   function applyComposer() {
+    if (cur === 'fire' && !outer) { outer = mk('div', 'fxo fxo-c'); flames(outer, 14, 18, 34, 8); glass.appendChild(outer); }
+    else if (cur !== 'fire' && outer) { const o = outer; outer = null; o.classList.add('out'); setTimeout(() => o.remove(), 450); }
     if (cur) {
       glass.dataset.fx = cur;
       if (!layer || layer.dataset.k !== cur) {
@@ -195,6 +263,7 @@
     const b = mk('div', 'msg-bubble fx'); b.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); b.appendChild(f);
     if (k === 'gift') b.appendChild(cover());
+    if (k === 'fire') { const o = mk('div', 'fxo'); flames(o, 7, 14, 24, 4); b.appendChild(o); }
     b.appendChild(mk('div', 'msg-text', 'مرحبًا بك'));
     return b;
   }
@@ -240,5 +309,5 @@
   btn.addEventListener('click', () => { if (panelOpen) closePanel(); else openPanel(); });
   document.addEventListener('pointerdown', (e) => { if (panelOpen && !e.target.closest('.fx-panel') && !e.target.closest('#fxToggleBtn')) closePanel(); }, true);
 
-  window.FRFx = { after, tap, edited, clear, quote, search, outgoing, closePanel, isOpen: () => panelOpen || !!cur || splAll };
+  window.FRFx = { screen: (k) => { if (k !== 'gift') screen(k); }, after, tap, edited, clear, quote, search, outgoing, closePanel, isOpen: () => panelOpen || !!cur || splAll };
 })();

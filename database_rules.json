@@ -398,6 +398,13 @@
           ".validate": false
         }
       }
+    },
+    "config": {
+      ".read": "auth != null && auth.token.email_verified === true",
+      "pushOff": {
+        ".write": "auth != null && auth.token.email_verified === true && root.child('users/'+auth.uid+'/usernameLower').val() === root.child('config/adminUsername').val()",
+        ".validate": "newData.isBoolean()"
+      }
     }
   }
 }
