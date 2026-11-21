@@ -15,7 +15,7 @@
 .fxb { z-index: 0; }
 .fx-layer { z-index: -1; transition: opacity .4s ease; }
 .fx-layer.out { opacity: 0; }
-.msg-bubble.fx > *:not(.fxb):not(.react-burst):not(.fxo) { position: relative; z-index: 1; }
+.msg-bubble.fx > *:not(.fxb):not(.react-burst):not(.fxo):not(.fxc) { position: relative; z-index: 1; }
 :is(.fxb, .fx-layer)::before { content: ''; position: absolute; left: -10%; right: -10%; bottom: -40%; height: 100%; transform-origin: 50% 100%;
   background: radial-gradient(ellipse at 50% 100%, rgba(var(--fg),.7), rgba(var(--fg),.25) 45%, transparent 70%); animation: fxBreath 1.6s ease-in-out infinite alternate; }
 @keyframes fxBreath { from { transform: scaleY(.8); opacity: .7; } to { transform: scaleY(1.15); opacity: 1; } }
@@ -244,3 +244,9 @@
 [data-k="fire"] > i { width: 3px; height: 3px; border-radius: 50%; background: #ffd27a; box-shadow: 0 0 6px 2px #ff8a1f; filter: none; }
 .msg-bubble.fx.fx-hit[data-fx="fire"] { animation: fxHitFire .5s ease; }
 @keyframes fxHitFire { 50% { box-shadow: inset 0 0 0 2px #fff0c0, inset 0 3px 8px rgba(255,255,255,.6), 0 0 34px 6px rgba(255,170,50,1), var(--shadow-1); } }
+
+/* ===== v4: canvas fire ===== */
+.fxc { position: absolute; pointer-events: none; z-index: -1; }
+.sc-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
+.msg-row.fxo-row { margin-top: 62px; }
+.fx-tile[data-fx="fire"] .fx-stage { padding-top: 74px; }

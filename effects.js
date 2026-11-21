@@ -43,8 +43,8 @@
     }
   }
   const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => {
-    if (!e.target.isConnected) { io.unobserve(e.target); return; }
-    e.target.classList.toggle('fx-live', e.isIntersecting);
+    if (!e.target.isConnected) { if (e.target._fire) e.target._fire.setOn(false); io.unobserve(e.target); return; }
+    e.target.classList.toggle('fx-live', e.isIntersecting); if (e.target._fire) e.target._fire.setOn(e.isIntersecting);
   })) : null;
   function watch(row) {
     if (!row || row._fxw) return; row._fxw = 1; row.classList.add('fxwatch');
@@ -69,7 +69,7 @@
     host.appendChild(w); setTimeout(() => w.remove(), 1500);
   }
   function hit(b, x, y) {
-    burst(b, x, y, b.dataset.fx, 9);
+    burst(b, x, y, b.dataset.fx, 9); if (b._fe) b._fe.boost = .5;
     b.classList.remove('fx-hit'); void b.offsetWidth; b.classList.add('fx-hit');
     clearTimeout(b._ht); b._ht = setTimeout(() => b.classList.remove('fx-hit'), 650);
   }
@@ -109,34 +109,79 @@
     }
   }
 
-  // ---------- real flames: curved tongues that burn out of the edges ----------
-  const FO = 'M45 124C18 124 6 104 10 82C13 66 24 58 26 42C27 34 24 24 30 14C32 24 40 28 42 18C43 12 41 6 46 0C48 14 58 22 66 36C74 48 84 62 82 84C80 108 66 124 45 124Z';
-  const FI = 'M45 122C30 122 24 108 28 94C31 84 38 80 40 68C46 76 54 82 58 94C62 108 56 122 45 122Z';
-  let defsOk = false;
-  function ensureDefs() {
-    if (defsOk) return; defsOk = true;
-    const d = document.createElement('div'); d.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
-    d.innerHTML = '<svg width="0" height="0"><defs><linearGradient id="fxgA" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff4d00"/><stop offset=".5" stop-color="#ff9a1a"/><stop offset="1" stop-color="#ffd45e"/></linearGradient>'
-      + '<linearGradient id="fxgB" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ffc23d"/><stop offset="1" stop-color="#fff3c4"/></linearGradient>'
-      + '<linearGradient id="fxgR" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#c81e00"/><stop offset="1" stop-color="#ff6a12"/></linearGradient>'
-      + '<symbol id="fxF" viewBox="0 0 90 124"><path d="' + FO + '" fill="url(#fxgA)"/><path d="' + FI + '" fill="url(#fxgB)"/></symbol>'
-      + '<symbol id="fxR" viewBox="0 0 90 124"><path d="' + FO + '" fill="url(#fxgR)"/></symbol></defs></svg>';
-    document.body.appendChild(d);
+  // ---------- real fire: one shared canvas particle engine (additive blending -> one connected, living flame) ----------
+  const Fire = (() => {
+    const COL = ['255,250,205', '255,222,110', '255,170,40', '255,105,15', '215,45,0', '120,15,0'];
+    let spr = null, raf = 0, last = 0; const act = new Set();
+    const sprites = () => spr || (spr = COL.map((c) => {
+      const cv = document.createElement('canvas'); cv.width = cv.height = 48; const x = cv.getContext('2d'), g = x.createRadialGradient(24, 24, 0, 24, 24, 24);
+      g.addColorStop(0, 'rgba(' + c + ',1)'); g.addColorStop(.4, 'rgba(' + c + ',.5)'); g.addColorStop(1, 'rgba(' + c + ',0)'); x.fillStyle = g; x.fillRect(0, 0, 48, 48); return cv;
+    }));
+    function loop(now) {
+      raf = 0; if (!act.size) return;
+      const dt = Math.min(.05, (now - last) / 1000 || .016); last = now;
+      act.forEach((e) => { if (!e.cv.isConnected) { act.delete(e); return; } e.step(dt); });
+      raf = requestAnimationFrame(loop);
+    }
+    function make(cv, o) {
+      const ctx = cv.getContext('2d'), e = { cv, o, w: 0, h: 0, parts: [], t: 0, acc: 0, on: false, boost: 0, box: null,
+        size(w, h) { cv.width = w; cv.height = h; e.w = w; e.h = h; },
+        setOn(v) {
+          if (v === e.on || (v && act.size >= 6)) return; e.on = v;
+          if (v) { act.add(e); if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); } }
+          else { act.delete(e); ctx.clearRect(0, 0, e.w, e.h); e.parts.length = 0; }
+        },
+        step(dt) {
+          e.t += dt; const S = sprites(), env = o.env ? o.env(e.t) : 1; if (e.boost > 0) e.boost -= dt;
+          e.acc += o.rate * env * (e.boost > 0 ? 2.6 : 1) * dt; let n = e.acc | 0; e.acc -= n;
+          while (n-- > 0 && e.parts.length < o.max) e.parts.push(o.spawn(e));
+          ctx.globalCompositeOperation = 'source-over'; ctx.clearRect(0, 0, e.w, e.h); ctx.globalCompositeOperation = 'lighter';
+          const P = e.parts;
+          for (let i = P.length - 1; i >= 0; i--) {
+            const p = P[i]; p.age += dt;
+            if (p.age >= p.life) { P[i] = P[P.length - 1]; P.pop(); continue; }
+            const a = p.age / p.life; p.x += (p.vx + Math.sin(e.t * 7 + p.ph) * p.sw) * dt; p.y += p.vy * dt;
+            const s = p.s * (1 - .6 * a) * 2; ctx.globalAlpha = Math.min(1, (1 - a) * 1.4) * p.al;
+            ctx.drawImage(S[p.fix != null ? p.fix : Math.min(5, (a * 5.2) | 0)], p.x - s / 2, p.y - s / 2, s, s);
+          }
+          ctx.globalAlpha = 1;
+        } };
+      return e;
+    }
+    return { make };
+  })();
+  const tongue = (x, t) => .5 + .5 * Math.sin(x * .045 + t * 3.2) * Math.sin(x * .021 - t * 2.1 + 1.3);
+  function spawnRect(e) {
+    const o = e.o, b = e.box, t = e.t, u = Math.random(); let x, y, side;
+    if (u < o.wt) { x = b.x + rnd(0, b.w); y = b.y + 3; side = 0; }
+    else if (u < o.wl) { x = b.x + 3; y = b.y + rnd(b.h * .1, b.h); side = 1; }
+    else if (u < o.wr) { x = b.x + b.w - 3; y = b.y + rnd(b.h * .1, b.h); side = 2; }
+    else { x = b.x + rnd(b.w * .08, b.w * .92); y = b.y + b.h - 4; side = 3; }
+    const n = side === 0 ? tongue(x, t) : tongue(y * 1.7 + side * 40, t), spark = Math.random() < .035;
+    const rise = (side === 3 ? 26 : (side ? .62 : 1) * (62 + 96 * n)) * o.k * rnd(.8, 1.2);
+    return { x, y, vx: (side === 1 ? -rnd(4, 22) : side === 2 ? rnd(4, 22) : rnd(-8, 8)) * o.k * 1.6, vy: -rise * (spark ? 1.6 : 1), age: 0,
+      life: spark ? rnd(.9, 1.5) : (side === 3 ? rnd(.25, .4) : (.5 + .55 * n) * rnd(.85, 1.15)), s: spark ? o.s * .28 : o.s * rnd(.75, 1.25) * (.7 + .6 * n),
+      ph: Math.random() * 6.28, sw: rnd(8, 22) * o.k * 1.4, fix: spark ? 1 : null, al: spark ? 1 : .9 };
   }
-  function fl(parent, x, y, h, r) {
-    const e = document.createElement('span'); e.className = 'fl';
-    e.innerHTML = '<svg viewBox="0 0 90 124" class="bk"><use href="#fxR"/></svg><svg viewBox="0 0 90 124"><use href="#fxF"/></svg>';
-    e.style.cssText = '--x:' + x + ';--y:' + y + ';--h:' + h.toFixed(0) + 'px;--w:' + (h * .73).toFixed(0) + 'px;--r:' + r + 'deg;--t:' + rnd(.45, .9).toFixed(2) + 's;--d:-' + rnd(0, .9).toFixed(2) + 's';
-    parent.appendChild(e);
+  function spawnScreen(e) {
+    const W = e.w, H = e.h, u = Math.random(); let x, y, side;
+    if (u < .6) { x = rnd(0, W); y = H + 6; side = 0; } else if (u < .8) { x = -4; y = rnd(H * .2, H); side = 1; } else { x = W + 4; y = rnd(H * .2, H); side = 2; }
+    const n = tongue(x * 1.2 + side * 80, e.t);
+    return { x, y, vx: side === 1 ? rnd(4, 30) : side === 2 ? -rnd(4, 30) : rnd(-12, 12), vy: -(side ? 160 + 120 * n : 220 + 300 * n) * rnd(.8, 1.2), age: 0,
+      life: side ? .6 + .5 * n : .7 + .7 * n, s: side ? rnd(18, 34) : rnd(26, 50) * (.7 + .6 * n), ph: Math.random() * 6.28, sw: rnd(10, 30), fix: null, al: .9 };
   }
-  const BUB = [[8, 34, -10], [19, 24, 6], [47, 26, -2], [76, 40, -4], [90, 56, 6], [97, 28, 16]];
-  const BAR = [[4, 40, -8], [12, 26, 5], [22, 20, -3], [34, 24, 2], [47, 34, -3], [53, 48, 4], [62, 26, -5], [74, 30, 3], [86, 38, -4], [94, 54, 5], [99, 28, 12]];
-  function burn(o, bar) {
-    ensureDefs();
-    (bar ? BAR : BUB).forEach((a) => fl(o, a[0] + '%', '5px', a[1], a[2]));
-    if (bar) { fl(o, '4px', '45%', 34, -80); fl(o, 'calc(100% - 4px)', '45%', 34, 80); }
-    else { fl(o, '3px', '42%', 30, -78); fl(o, 'calc(100% - 3px)', '36%', 26, 80); }
-    flames(o, 0, 0, 0, bar ? 8 : 5);
+  const demoFires = [], fro = 'ResizeObserver' in window ? new ResizeObserver((es) => es.forEach((x) => { if (x.target._fe) x.target._fe.resize(); })) : null;
+  function attachFire(host, row, bar) {
+    const cv = mk('canvas', 'fxc'); host.appendChild(cv);
+    const P = bar ? { pl: 22, pt: 100, pr: 22, pb: 4, k: .5, s: 15, wt: .7, wl: .85, wr: 1, max: 240 } : { pl: 30, pt: 72, pr: 30, pb: 14, k: .45, s: 11, wt: .5, wl: .7, wr: .9, max: 170 };
+    const e = Fire.make(cv, Object.assign({ spawn: spawnRect, rate: 60 }, P));
+    e.resize = () => {
+      const w = host.offsetWidth, h = host.offsetHeight; if (!w || !h) return;
+      e.size(w + P.pl + P.pr, h + P.pt + P.pb); cv.style.cssText = 'left:' + (-P.pl) + 'px;top:' + (-P.pt) + 'px;width:' + e.w + 'px;height:' + e.h + 'px';
+      e.box = { x: P.pl, y: P.pt, w, h }; e.o.rate = bar ? (w + 2 * h) * .3 : 2 * (w + h) * .26;
+    };
+    const base = e.setOn; e.setOn = (v) => { if (v && !e.box) e.resize(); if (e.box) base(v); };
+    host._fe = e; if (row) row._fire = e; if (fro) fro.observe(host); else e.resize(); e.cv = cv; return e;
   }
 
   // ---------- full-screen effects (sender + live receiver) ----------
@@ -155,11 +200,9 @@
   }
   const SC = {
     fire: { ms: 3400, f(el, W, H) {
-      const m = (cls, w) => { const o = mk('div', 'fxo2 ' + cls), g = mk('div', 'fg'); if (w) o.style.width = w + 'px'; o.appendChild(g); el.appendChild(o); return g; };
-      ensureDefs(); const b = m('', 0), l = m('sl', H), r = m('sr', H);
-      for (let i = 0; i < 14; i++) fl(b, ((i + .5) / 14 * 100 + rnd(-3, 3)).toFixed(1) + '%', '0px', rnd(120, 230), rnd(-6, 6));
-      [l, r].forEach((g) => { for (let i = 0; i < 8; i++) fl(g, ((i + .5) / 8 * 100 + rnd(-3, 3)).toFixed(1) + '%', '0px', rnd(60, 110), rnd(-8, 8)); });
-      flames(b, 0, 0, 0, 16);
+      const cv = mk('canvas', 'sc-cv'); el.appendChild(cv);
+      const e = Fire.make(cv, { spawn: spawnScreen, rate: 300, max: 300, env: (t) => t < .35 ? t / .35 : t > 2.7 ? Math.max(0, (3.3 - t) / .6) : 1 });
+      e.size(W, H); el._fire = e; e.setOn(true);
     } },
     thunder: { ms: 1900, f(el, W, H) {
       el.appendChild(mk('div', 'sc-dark')); el.appendChild(mk('div', 'sc-flash'));
@@ -186,10 +229,10 @@
   function screen(k) {
     const d = SC[k]; if (!d || document.visibilityState !== 'visible' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const app = document.querySelector('.app'); if (!app) return;
-    if (scEl) { scEl.remove(); clearTimeout(scT); }
+    if (scEl) { if (scEl._fire) scEl._fire.setOn(false); scEl.remove(); clearTimeout(scT); }
     const el = mk('div', 'fx-screen sc-' + k), W = app.clientWidth, H = app.clientHeight;
     el.style.setProperty('--H', (H + 50) + 'px'); d.f(el, W, H); app.appendChild(el); scEl = el;
-    scT = setTimeout(() => { el.classList.add('out'); setTimeout(() => { el.remove(); if (scEl === el) scEl = null; }, 500); }, d.ms);
+    scT = setTimeout(() => { el.classList.add('out'); setTimeout(() => { if (el._fire) el._fire.setOn(false); el.remove(); if (scEl === el) scEl = null; }, 500); }, d.ms);
   }
 
   // ---------- hooks used by app.js ----------
@@ -200,7 +243,7 @@
     bubble.classList.add('fx'); bubble.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); bubble.insertBefore(f, bubble.firstChild);
     if (k === 'gift') { bubble.insertBefore(cover(), f.nextSibling); if (mine || opened.has(key)) bubble.classList.add('opened'); }
-    if (k === 'fire') { const o = mk('div', 'fxo'); burn(o, false); bubble.appendChild(o); row.classList.add('fxo-row'); }
+    if (k === 'fire') { attachFire(bubble, row, false); row.classList.add('fxo-row'); }
     watch(row);
   }
   function tap(e, key) {
@@ -233,8 +276,8 @@
   let outer = null, cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
 
   function applyComposer() {
-    if (cur === 'fire' && !outer) { outer = mk('div', 'fxo fxo-c'); burn(outer, true); glass.appendChild(outer); }
-    else if (cur !== 'fire' && outer) { const o = outer; outer = null; o.classList.add('out'); setTimeout(() => o.remove(), 450); }
+    if (cur === 'fire' && !outer) { outer = attachFire(glass, null, true); outer.setOn(true); }
+    else if (cur !== 'fire' && outer) { const o = outer; outer = null; o.cv.style.transition = 'opacity .4s'; o.cv.style.opacity = 0; setTimeout(() => { o.setOn(false); o.cv.remove(); glass._fe = null; if (fro) fro.unobserve(glass); }, 450); }
     if (cur) {
       glass.dataset.fx = cur;
       if (!layer || layer.dataset.k !== cur) {
@@ -296,7 +339,7 @@
     const b = mk('div', 'msg-bubble fx'); b.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); b.appendChild(f);
     if (k === 'gift') b.appendChild(cover());
-    if (k === 'fire') { const o = mk('div', 'fxo'); burn(o, false); b.appendChild(o); }
+    if (k === 'fire') demoFires.push(attachFire(b, null, false));
     b.appendChild(mk('div', 'msg-text', 'مرحبًا بك'));
     return b;
   }
@@ -329,14 +372,14 @@
     $('fxSplSel').classList.toggle('dim', input.selectionStart === input.selectionEnd);
     panel.classList.add('open'); btn.classList.add('active'); panelOpen = true;
     if (document.activeElement === input) input.blur();
-    FRNav.push('fx', hidePanel);
+    FRNav.push('fx', hidePanel); demoFires.forEach((e) => e.setOn(true));
     const g = panel.querySelector('.fx-stage .msg-bubble[data-fx="gift"]');
     if (g) giftTimer = setInterval(() => { const o = g.classList.toggle('opened'); if (o) { g.classList.add('revealing'); setTimeout(() => g.classList.remove('revealing'), 700); } }, 2800);
     if (C().expand) C().expand();
   }
   function hidePanel() {
     panel.classList.remove('open'); btn.classList.remove('active'); panelOpen = false;
-    clearInterval(giftTimer); giftTimer = null; if (C().expand) C().expand();
+    clearInterval(giftTimer); giftTimer = null; demoFires.forEach((e) => e.setOn(false)); if (C().expand) C().expand();
   }
   function closePanel() { if (panelOpen) FRNav.back('fx'); }
   btn.addEventListener('click', () => { if (panelOpen) closePanel(); else openPanel(); });
