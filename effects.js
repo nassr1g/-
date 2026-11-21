@@ -36,6 +36,7 @@
   // ---------- shared helpers ----------
   const mask = (t) => String(t || '').replace(new RegExp(SPL, 'g'), '••••');
   function parts(el, n) {
+    return;
     for (let i = 0; i < n; i++) {
       const p = document.createElement('i');
       p.style.cssText = '--x:' + (Math.random() * 100).toFixed(0) + '%;--y:' + (Math.random() * 85).toFixed(0) + '%;--s:' + rnd(6, 13).toFixed(1) + 'px;--d:-' + rnd(0, 4).toFixed(2) + 's;--t:' + rnd(2.2, 4.8).toFixed(2) + 's;--h:' + (36 + Math.random() * 50 | 0) + 'px';
@@ -109,7 +110,7 @@
     }
   }
 
-  // ---------- real fire: WebGL shader (fbm turbulence + heat colour ramp) -> one connected, living flame ----------
+  // ---------- living edge effects: WebGL shaders drawn around the real shape (fire / ice / hearts / galaxy / sakura / thunder / gold / gift) ----------
   const Fire = (() => {
     const VS = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
     const HEAD = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n'
@@ -119,17 +120,81 @@
       + 'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.02+vec2(11.7,5.3);a*=.5;}return v;}\n'
       + 'vec4 ramp(float f,float I){vec3 c=mix(vec3(.5,.04,0.),vec3(1.,.36,.03),smoothstep(0.,.35,f));c=mix(c,vec3(1.,.74,.16),smoothstep(.35,.72,f));c=mix(c,vec3(1.,.96,.78),smoothstep(.93,1.,f));float a=smoothstep(.06,.34,f)*I*.9;return vec4(c*a,a);}\n'
       + 'float turb(vec2 px){float w=fbm(vec2(px.x*.02*uF,px.y*.02*uF-uT*.6));vec2 p=vec2(px.x*.075*uF+w*1.4,px.y*.04*uF+uT*2.6);return fbm(p)*.65+fbm(p*2.1+vec2(3.,-uT*1.3))*.35;}\n';
+    const LIB = 'float h21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\n'
+      + 'vec2 h22(vec2 p){p=vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3)));return fract(sin(p)*43758.5453);}\n'
+      + 'vec4 ov(vec4 a,vec4 b){return b+a*(1.-b.a);}\n'
+      + 'vec4 pm(vec3 c,float a){return vec4(c*a,a);}\n'
+      + 'vec2 rot(vec2 v,float a){float c=cos(a),s=sin(a);return vec2(c*v.x-s*v.y,s*v.x+c*v.y);}\n'
+      + 'float es(vec2 p,vec2 h){vec2 q=abs(p)-h+uR;return q.x>q.y?p.y+3000.+(p.x>0.?500.:0.):p.x+(p.y>0.?1500.:0.);}\n'
+      + 'float sdHeart(vec2 p){p.x=abs(p.x);if(p.y+p.x>1.){vec2 a=p-vec2(.25,.75);return sqrt(dot(a,a))-.35355;}vec2 b=p-vec2(0.,1.);vec2 c=p-.5*max(p.x+p.y,0.);return sqrt(min(dot(b,b),dot(c,c)))*sign(p.x-p.y);}\n'
+      + 'float spark(vec2 p){float k=min(abs(p.x),abs(p.y));float m=smoothstep(.16,0.,k)*smoothstep(1.,0.,max(abs(p.x),abs(p.y)));return m+smoothstep(.4,0.,length(p))*.7;}\n'
+      // kind: 0 dot, 1 heart, 2 petal, 3 sparkle, 4 confetti
+      + 'vec4 parts(vec2 px,float vis,vec2 vel,float S,int kind,float dens,vec3 ca,vec3 cb){vec2 g=px-vel*uT;vec4 o=vec4(0.);vec2 base=floor(g/S);\n'
+      + 'for(int i=-1;i<=1;i++){for(int j=-1;j<=1;j++){vec2 id=base+vec2(float(i),float(j));vec2 r=h22(id);float r3=h21(id+7.7);if(r.y>dens)continue;\n'
+      + 'vec2 cen=(id+.2+.6*r)*S;cen.x+=sin(uT*1.4+r3*6.28)*S*.2;vec2 v=g-cen;float sz=S*(.12+.14*r3);float tw=.6+.4*sin(uT*3.+r3*40.);vec3 col=mix(ca,cb,r3);float m=0.;\n'
+      + 'if(kind==0){m=smoothstep(1.,.25,length(v)/sz);}\n'
+      + 'else if(kind==1){vec2 w=rot(v,(r.x-.5)*.6)/(sz*1.9);w=vec2(w.x,-w.y)+vec2(0.,.55);float dd=sdHeart(w)*sz*1.9;m=smoothstep(.9,-.6,dd);col=mix(col,vec3(1.),.35*clamp(w.y-.5,0.,1.));}\n'
+      + 'else if(kind==2){vec2 w=rot(v,r3*6.28+uT*(r.x-.5)*2.)/(sz*1.5);float t=clamp(w.y*.5+.5,0.,1.);float wd=.62*pow(max(sin(3.14159*t),0.),.7);if(w.y>.8)wd*=1.-.5*smoothstep(.8,1.,w.y)*(1.-smoothstep(0.,.25,abs(w.x)));m=smoothstep(.1,0.,abs(w.x)-wd)*smoothstep(1.1,.95,abs(w.y));col=mix(col,vec3(1.,.97,.98),.5*(1.-t));}\n'
+      + 'else if(kind==3){vec2 w=v/(sz*1.8);m=spark(w)*tw;}\n'
+      + 'else{vec2 w=rot(v,r3*6.28+uT*(r.x-.5)*6.)/sz;m=smoothstep(.2,0.,max(abs(w.x)-1.,abs(w.y)-.45));col=.55+.45*cos(6.28*(r3*3.+vec3(0.,.33,.66)));}\n'
+      + 'o=ov(o,pm(col,clamp(m,0.,1.)*vis));}}return o;}\n';
+    const FX = {
+      ice: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float R=uH*mix(.55,1.,up);float s=es(p,h);vec4 o=vec4(0.);\n'
+        + 'float mist=fbm(vec2(s*.025,d*.05-uT*.35))*smoothstep(R*1.5,0.,max(d,0.))*smoothstep(-2.,2.,d);o=ov(o,pm(vec3(.75,.92,1.),mist*.2));\n'
+        + 'for(int k=0;k<2;k++){float per=k==0?13.:8.;float sc=s+(k==0?0.:4.3);float id=floor(sc/per),fr=fract(sc/per);float hh=(pow(h21(vec2(id,float(k)+1.)),1.7)*.85+.15)*R*(k==0?.8:.4);float sp=hh*(1.-abs(fr-.5)*2.);\n'
+        + 'float m=smoothstep(.9,-.9,d-sp)*smoothstep(-1.5,.5,d);float tt=clamp(d/max(sp,1.),0.,1.);vec3 col=mix(vec3(.93,.99,1.),vec3(.35,.72,1.),tt);col*=fr<.5?1.:.8;\n'
+        + 'float sh=pow(.5+.5*sin(sc*.05-uT*2.6),10.);col+=sh*.6;col=mix(col,vec3(1.),smoothstep(1.6,0.,abs(d-sp))*.5);o=ov(o,pm(col,m*(k==0?.95:.7)));}\n'
+        + 'float vis=smoothstep(R*1.6,R*.1,max(d,0.))*smoothstep(-1.,3.,d);\n'
+        + 'o=ov(o,parts(px,vis,vec2(8.,34.),22.,0,.16,vec3(.85,.95,1.),vec3(1.)));o=ov(o,parts(px,vis,vec2(0.,6.),30.,3,.07,vec3(.7,.9,1.),vec3(1.)));return o;}',
+      love: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float ph=fract(uT*.9);float b=exp(-ph*8.)+.55*exp(-max(ph-.26,0.)*9.)*step(.26,ph);float dd=max(d,0.);\n'
+        + 'vec4 o=pm(vec3(1.,.28,.55),exp(-dd/(uH*.3))*(.22+.38*b)*smoothstep(-3.,1.,d));o=ov(o,pm(vec3(1.,.8,.9),smoothstep(2.4,0.,abs(d-.8))*(.35+.3*b)));\n'
+        + 'float vis=smoothstep(uH*2.,uH*.2,dd)*smoothstep(-1.,3.,d);\n'
+        + 'o=ov(o,parts(px,vis,vec2(0.,-30.),28.,1,.3,vec3(1.,.3,.55),vec3(1.,.62,.78)));o=ov(o,parts(px+17.,vis,vec2(0.,-18.),24.,3,.08,vec3(1.,.8,.9),vec3(1.)));return o;}',
+      galaxy: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){vec2 c=px-p;float dd=max(d,0.);float reach=uH*1.4;float z=smoothstep(reach,0.,dd)*smoothstep(-2.,2.,d);\n'
+        + 'float n=fbm(px*.011+vec2(uT*.04,0.));float n2=fbm(px*.018+vec2(4.,-uT*.05));float neb=smoothstep(.3,.7,n*.65+n2*.5)*z;\n'
+        + 'vec3 nc=mix(mix(vec3(.42,.18,.9),vec3(.15,.45,1.),n2),vec3(.9,.35,.8),smoothstep(.55,.85,n));vec4 o=pm(nc,neb*.9);\n'
+        + 'float vis=smoothstep(reach,0.,dd)*smoothstep(-1.,3.,d);\n'
+        + 'o=ov(o,parts(px,vis,vec2(0.),13.,3,.16,vec3(.8,.85,1.),vec3(.7,1.,.95)));o=ov(o,parts(px+9.,vis,vec2(0.),24.,3,.06,vec3(1.,.85,1.),vec3(1.)));\n'
+        + 'float per=4.6;float cy=floor(uT/per);float tt=uT-cy*per;\n'
+        + 'if(tt<.8&&h21(vec2(cy,3.))>.3){vec2 dir=normalize(vec2(1.,.55));vec2 st=vec2(c.x+(h21(vec2(cy,5.))-.5)*h.x*1.6-uH*.6,c.y-h.y-uH*.9);vec2 head=st+dir*tt*uH*3.2;vec2 tail=head-dir*uH*.9;vec2 pa=px-tail,ba=head-tail;float k=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);float ds=length(pa-ba*k);\n'
+        + 'float env=smoothstep(0.,.1,tt)*smoothstep(.8,.5,tt);o=ov(o,pm(vec3(.85,.92,1.),smoothstep(2.2,0.,ds)*k*k*env));}\n'
+        + 'return o;}',
+      sakura: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float dd=max(d,0.);float R=uH*1.3;float vis=smoothstep(R,R*.1,dd)*smoothstep(-1.,3.,d);\n'
+        + 'vec4 o=pm(vec3(1.,.6,.78),exp(-dd/(uH*.35))*.18*smoothstep(-3.,1.,d));\n'
+        + 'o=ov(o,parts(px,vis,vec2(14.,34.),34.,2,.26,vec3(1.,.72,.84),vec3(1.,.9,.95)));o=ov(o,parts(px+33.,vis*.8,vec2(10.,22.),26.,2,.16,vec3(1.,.62,.78),vec3(1.,.85,.92)));return o;}',
+      thunder: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float s=es(p,h);float dd=max(d,0.);vec2 c=px-p;float pulse=.5+.5*sin(uT*3.1);\n'
+        + 'vec4 o=pm(vec3(.35,.5,1.),exp(-dd/(uH*.4))*(.16+.12*pulse)*smoothstep(-3.,1.,d));\n'
+        + 'for(int k=0;k<3;k++){float sd=float(k)+1.;float seg=smoothstep(.42,.7,fbm(vec2(s*.012+sd*7.,uT*.9+sd)));\n'
+        + 'float jag=(noise(vec2(s*.16+sd*3.,uT*9.+sd))-.5)*uH*.25+(fbm(vec2(s*.05+sd,uT*1.5))-.5)*uH*.38;float off=uH*(.1+.07*sd)+jag;float dist=abs(d-off);\n'
+        + 'float fl=.55+.45*h21(vec2(floor(uT*16.),sd));float core=exp(-dist*dist/1.6);float glow=exp(-dist*dist/25.)*.55;vec3 col=mix(vec3(.45,.6,1.),vec3(.75,.55,1.),sd/3.);\n'
+        + 'o=ov(o,pm(col,glow*seg*fl*.8));o=ov(o,pm(vec3(.95,.97,1.),core*seg*fl));}\n'
+        + 'float per=2.4;float cy=floor(uT/per);float tt=uT-cy*per;float yh=(c.y-h.y)-px.y;\n'
+        + 'if(tt<.2&&h21(vec2(cy,9.))>.3&&yh>0.){float x0=c.x+(h21(vec2(cy,2.))-.5)*h.x*1.7;float xp=x0+(fbm(vec2(yh*.07,cy))-.5)*uH*1.3+(noise(vec2(yh*.3,cy*3.))-.5)*uH*.25;float dist=abs(px.x-xp);\n'
+        + 'float env=exp(-tt*12.)*(.6+.4*step(.5,fract(tt*38.)))*smoothstep(uH*1.7,uH*.6,yh)*smoothstep(0.,4.,yh);o=ov(o,pm(vec3(.5,.62,1.),exp(-dist*dist/30.)*env*.7));o=ov(o,pm(vec3(1.),exp(-dist*dist/1.4)*env));}\n'
+        + 'return o;}',
+      gold: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float s=es(p,h);float dd=max(d,0.);float sh=.5+.5*sin(s*.028-uT*2.2);float sh2=pow(sh,4.);\n'
+        + 'vec4 o=pm(vec3(1.,.72,.2),exp(-dd/(uH*.3))*.3*smoothstep(-3.,1.,d));float band=smoothstep(2.6,0.,abs(d-1.))*(.7+.3*sh);o=ov(o,pm(mix(vec3(1.,.7,.15),vec3(1.,.96,.75),sh2),band));\n'
+        + 'float vis=smoothstep(uH*1.6,uH*.1,dd)*smoothstep(-1.,3.,d);\n'
+        + 'o=ov(o,parts(px,vis,vec2(0.,-24.),15.,0,.28,vec3(1.,.72,.18),vec3(1.,.9,.5)));o=ov(o,parts(px+5.,vis,vec2(0.,-16.),28.,3,.1,vec3(1.,.85,.4),vec3(1.)));return o;}',
+      gift: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float dd=max(d,0.);vec3 gc=mix(vec3(1.,.25,.4),vec3(1.,.7,.2),.5+.5*sin(uT*1.2));\n'
+        + 'vec4 o=pm(gc,exp(-dd/(uH*.3))*(.2+.06*sin(uT*2.))*smoothstep(-3.,1.,d));o=ov(o,pm(vec3(1.,.85,.4),smoothstep(2.,0.,abs(d-.8))*.55));\n'
+        + 'float vis=smoothstep(uH*1.6,uH*.1,dd)*smoothstep(-1.,3.,d);\n'
+        + 'o=ov(o,parts(px,vis,vec2(0.,-20.),28.,3,.16,vec3(1.,.85,.4),vec3(1.)));o=ov(o,parts(px+11.,vis,vec2(0.,-12.),28.,4,.14,vec3(1.),vec3(1.)));return o;}'
+    };
+    const MAIN = 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);vec2 c=uBox.xy+uBox.zw*.5,h=uBox.zw*.5;vec2 p=px-c;vec2 q=abs(p)-h+uR;float d=length(max(q,0.))+min(max(q.x,q.y),0.)-uR;'
+      + 'float up=clamp(-p.y/max(length(p),1.),-1.,1.)*.5+.5;float ef=smoothstep(0.,16.,min(min(px.x,uRes.x-px.x),min(px.y,uRes.y-px.y)));gl_FragColor=fx(px,d,p,h,up)*uI*ef;}';
     const FS = {
-      rect: HEAD + 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);vec2 c=uBox.xy+uBox.zw*.5,h=uBox.zw*.5;vec2 q=abs(px-c)-h+uR;float d=length(max(q,0.))+min(max(q.x,q.y),0.)-uR;'
+      fire: HEAD + 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);vec2 c=uBox.xy+uBox.zw*.5,h=uBox.zw*.5;vec2 q=abs(px-c)-h+uR;float d=length(max(q,0.))+min(max(q.x,q.y),0.)-uR;'
         + 'float up=clamp((c.y-px.y)/max(length(px-c),1.),-1.,1.)*.5+.5;float hm=mix(.04,1.,up*up*up);float t=max(d,0.)/(uH*hm);'
         + 'float f=clamp((1.-t)*.95+(turb(px)-.5)*1.9,0.,1.);if(d<0.)f*=smoothstep(-10.,0.,d);gl_FragColor=ramp(f,uI);}',
       screen: HEAD + 'void main(){vec2 px=vec2(gl_FragCoord.x,uRes.y-gl_FragCoord.y);float t=min((uRes.y-px.y)/uH,min(px.x/(uH*.3),(uRes.x-px.x)/(uH*.3)));'
         + 'float f=clamp((1.-t)*.95+(turb(px)-.5)*1.9,0.,1.);gl_FragColor=ramp(f,uI);}'
     };
+    Object.keys(FX).forEach((k) => { FS[k] = HEAD + LIB + FX[k] + MAIN; });
     let raf = 0, last = 0; const act = new Set();
     function glInit(cv, mode) {
       const gl = cv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false }); if (!gl) return null;
-      const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); return gl.getShaderParameter(x, gl.COMPILE_STATUS) ? x : null; };
+      const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) { console.warn('fx shader', mode, gl.getShaderInfoLog(x)); return null; } return x; };
       const v = sh(gl.VERTEX_SHADER, VS), f = sh(gl.FRAGMENT_SHADER, FS[mode]); if (!v || !f) return null;
       const pr = gl.createProgram(); gl.attachShader(pr, v); gl.attachShader(pr, f); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
       gl.useProgram(pr); const bf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -149,7 +214,7 @@
         setOn(v) {
           if (v === e.on) return;
           if (v) {
-            if (act.size >= 6) return; e.g = glInit(e.cv, o.mode); if (!e.g) return;
+            if (act.size >= 12) return; e.g = glInit(e.cv, o.mode); if (!e.g) return;
             e.on = true; e.t = Math.random() * 40; act.add(e); if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); }
           } else {
             e.on = false; act.delete(e);
@@ -168,11 +233,17 @@
     }
     return { make };
   })();
+  const tileIO = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((x) => { const f = x.target._fe; if (f) { f.vis = x.isIntersecting; f.setOn(f.vis && panelVis); } })) : null;
   const demoFires = [], fro = 'ResizeObserver' in window ? new ResizeObserver((es) => es.forEach((x) => { if (x.target._fe) x.target._fe.resize(); })) : null;
-  function attachFire(host, row, bar) {
+  const FXP = {
+    fire: [{ pl: 24, pt: 56, pr: 24, pb: 14, H: 34, R: 17 }, { pl: 24, pt: 80, pr: 24, pb: 16, H: 48, R: 28 }],
+    other: [{ pl: 40, pt: 60, pr: 40, pb: 40, H: 34, R: 17 }, { pl: 30, pt: 80, pr: 30, pb: 24, H: 54, R: 28 }]
+  };
+  function attachFx(host, row, bar, kind) {
     const cv = mk('canvas', 'fxc'); host.appendChild(cv);
-    const P = bar ? { pl: 24, pt: 80, pr: 24, pb: 16, H: 48, R: 28 } : { pl: 24, pt: 56, pr: 24, pb: 14, H: 34, R: 17 };
-    const e = Fire.make(cv, { mode: 'rect', H: P.H, R: P.R, F: 1 });
+    const P = (FXP[kind] || FXP.other)[bar ? 1 : 0];
+    const e = Fire.make(cv, { mode: kind, H: P.H, R: P.R, F: 1 });
+    e.kind = kind;
     e.resize = () => {
       const w = host.offsetWidth, h = host.offsetHeight; if (!w || !h) return;
       e.size(w + P.pl + P.pr, h + P.pt + P.pb); e.cv.style.cssText = 'left:' + (-P.pl) + 'px;top:' + (-P.pt) + 'px;width:' + e.w + 'px;height:' + e.h + 'px';
@@ -203,16 +274,46 @@
       const e = Fire.make(cv, { mode: 'screen', H: H * .5 * .11, F: .55, env: (t) => t < .35 ? t / .35 : t > 2.7 ? Math.max(0, (3.3 - t) / .6) : 1 });
       e.size(Math.round(W * .5), Math.round(H * .5)); el._fire = e; e.setOn(true);
     } },
-    thunder: { ms: 1900, f(el, W, H) {
-      el.appendChild(mk('div', 'sc-dark')); el.appendChild(mk('div', 'sc-flash'));
-      const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('width', W); svg.setAttribute('height', H); svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-      [[rnd(.12, .4) * W, 0], [rnd(.6, .88) * W, .5]].forEach(([x0, d]) => {
-        const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'bolt'); g.style.animationDelay = d + 's';
-        const pts = zig(x0, H * rnd(.5, .72), W * .07); bolt(g, pts);
-        const m = pts[Math.floor(pts.length / 2)], br = zig(m[0], H * .22, W * .06).map((q) => [q[0] + (Math.random() < .5 ? 1 : -1) * q[1] * .5, q[1] + m[1]]); bolt(g, br);
-        svg.appendChild(g);
-      });
-      el.appendChild(svg);
+    thunder: { ms: 2300, f(el, W, H) {
+      const cv = mk('canvas', 'sc-cv'); cv.width = Math.round(W); cv.height = Math.round(H); el.appendChild(cv);
+      const ctx = cv.getContext('2d');
+      // fractal bolt: midpoint displacement + tapering side branches
+      const bolt = (x0, len) => {
+        const segs = [];
+        const grow = (x1, y1, x2, y2, disp, w, depth) => {
+          if (depth <= 0 || Math.hypot(x2 - x1, y2 - y1) < 5) { segs.push([x1, y1, x2, y2, w]); return; }
+          const mx = (x1 + x2) / 2 + (Math.random() - .5) * disp, my = (y1 + y2) / 2 + (Math.random() - .5) * disp * .35;
+          grow(x1, y1, mx, my, disp * .52, w, depth - 1); grow(mx, my, x2, y2, disp * .52, w, depth - 1);
+          if ((depth === 4 || depth === 6) && w > .7 && Math.random() < (depth === 4 ? .6 : .35)) {
+            const a = Math.atan2(y2 - y1, x2 - x1) + (Math.random() < .5 ? -1 : 1) * rnd(.3, .75), L = Math.hypot(x2 - x1, y2 - y1) * rnd(.9, 1.8);
+            grow(mx, my, mx + Math.cos(a) * L, my + Math.sin(a) * L, disp * .55, w * .5, depth - 1);
+          }
+        };
+        grow(x0, -10, x0 + rnd(-.14, .14) * W, len, W * .3, 2.4, 8);
+        return segs;
+      };
+      const strikes = [{ t0: 0, segs: bolt(rnd(.2, .45) * W, H * rnd(.6, .78)), k: 1 }, { t0: .62, segs: bolt(rnd(.55, .85) * W, H * rnd(.5, .68)), k: .8 }];
+      const level = (t) => t < 0 ? 0 : Math.exp(-t * 4.2) * (.55 + .45 * (Math.sin(t * 64) > -.2 ? 1 : .35)) * Math.min(1, t / .02 + .2);
+      const t0 = performance.now();
+      const draw = (now) => {
+        if (!cv.isConnected) return;
+        const t = (now - t0) / 1000; ctx.globalCompositeOperation = 'source-over'; ctx.clearRect(0, 0, W, H);
+        let I = 0; strikes.forEach((s) => { I = Math.max(I, level(t - s.t0) * s.k); });
+        ctx.fillStyle = 'rgba(6,9,30,' + (.32 * Math.min(1, I * 2.2)) + ')'; ctx.fillRect(0, 0, W, H);
+        strikes.forEach((s) => {
+          const lv = level(t - s.t0) * s.k; if (lv < .02) return;
+          const g = ctx.createRadialGradient(s.segs[0][0], 0, 0, s.segs[0][0], 0, H * .75); g.addColorStop(0, 'rgba(190,210,255,' + (.38 * lv) + ')'); g.addColorStop(1, 'rgba(120,150,255,0)');
+          ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+          ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+          [[9, '110,140,255', .16], [3.4, '175,198,255', .45], [1, '255,255,255', 1]].forEach(([m, col, a]) => {
+            ctx.strokeStyle = 'rgba(' + col + ',' + Math.min(1, a * lv * 1.3) + ')';
+            s.segs.forEach((sg) => { ctx.lineWidth = Math.max(.6, sg[4] * m * (1 - sg[3] / H * .35)); ctx.beginPath(); ctx.moveTo(sg[0], sg[1]); ctx.lineTo(sg[2], sg[3]); ctx.stroke(); });
+          });
+          ctx.globalCompositeOperation = 'source-over';
+        });
+        requestAnimationFrame(draw);
+      };
+      requestAnimationFrame(draw);
     } },
     ice: { ms: 4200, f(el) { rain(el, 46, (p, i) => { if (i % 6 === 0) { p.className = 'g'; p.style.setProperty('--s', rnd(12, 20).toFixed(0) + 'px'); } }); } },
     love: { ms: 3800, f(el) { rain(el, 26, (p, i) => { p.style.setProperty('--s', rnd(14, 30).toFixed(0) + 'px'); p.style.setProperty('--c', ['#ff7eb6', '#ff4d8d', '#ffc2dc', '#ef6fc9'][i % 4]); }); } },
@@ -242,7 +343,7 @@
     bubble.classList.add('fx'); bubble.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); bubble.insertBefore(f, bubble.firstChild);
     if (k === 'gift') { bubble.insertBefore(cover(), f.nextSibling); if (mine || opened.has(key)) bubble.classList.add('opened'); }
-    if (k === 'fire') { attachFire(bubble, row, false); row.classList.add('fxo-row'); }
+    attachFx(bubble, row, false, k); row.classList.add(k === 'fire' ? 'fxo-row' : 'fxo-row2');
     watch(row);
   }
   function tap(e, key) {
@@ -272,11 +373,11 @@
   // ---------- composer: state + panel ----------
   const glass = document.querySelector('.composer-glass'), input = $('messageInput'), btn = $('fxToggleBtn'), panel = $('fxPanel'), chipsEl = $('fxChips');
   const ph0 = input ? input.placeholder : '';
-  let outer = null, cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
+  let outer = null, outerK = '', panelVis = false, cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
 
   function applyComposer() {
-    if (cur === 'fire' && !outer) { outer = attachFire(glass, null, true); outer.setOn(true); }
-    else if (cur !== 'fire' && outer) { const o = outer; outer = null; o.cv.style.transition = 'opacity .4s'; o.cv.style.opacity = 0; setTimeout(() => { o.setOn(false); o.cv.remove(); glass._fe = null; if (fro) fro.unobserve(glass); }, 450); }
+    if (outer && outerK !== cur) { const o = outer; outer = null; o.cv.style.transition = 'opacity .35s'; o.cv.style.opacity = 0; setTimeout(() => { o.setOn(false); o.cv.remove(); if (glass._fe === o) glass._fe = null; }, 400); }
+    if (cur && !outer) { outer = attachFx(glass, null, true, cur); outerK = cur; outer.setOn(true); }
     if (cur) {
       glass.dataset.fx = cur;
       if (!layer || layer.dataset.k !== cur) {
@@ -338,7 +439,7 @@
     const b = mk('div', 'msg-bubble fx'); b.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); b.appendChild(f);
     if (k === 'gift') b.appendChild(cover());
-    if (k === 'fire') demoFires.push(attachFire(b, null, false));
+    { const de = attachFx(b, null, false, k); de.vis = false; demoFires.push(de); if (tileIO) tileIO.observe(b); }
     b.appendChild(mk('div', 'msg-text', 'مرحبًا بك'));
     return b;
   }
@@ -371,14 +472,14 @@
     $('fxSplSel').classList.toggle('dim', input.selectionStart === input.selectionEnd);
     panel.classList.add('open'); btn.classList.add('active'); panelOpen = true;
     if (document.activeElement === input) input.blur();
-    FRNav.push('fx', hidePanel); demoFires.forEach((e) => e.setOn(true));
+    FRNav.push('fx', hidePanel); panelVis = true; demoFires.forEach((e) => e.setOn(e.vis));
     const g = panel.querySelector('.fx-stage .msg-bubble[data-fx="gift"]');
     if (g) giftTimer = setInterval(() => { const o = g.classList.toggle('opened'); if (o) { g.classList.add('revealing'); setTimeout(() => g.classList.remove('revealing'), 700); } }, 2800);
     if (C().expand) C().expand();
   }
   function hidePanel() {
     panel.classList.remove('open'); btn.classList.remove('active'); panelOpen = false;
-    clearInterval(giftTimer); giftTimer = null; demoFires.forEach((e) => e.setOn(false)); if (C().expand) C().expand();
+    clearInterval(giftTimer); giftTimer = null; panelVis = false; demoFires.forEach((e) => e.setOn(false)); if (C().expand) C().expand();
   }
   function closePanel() { if (panelOpen) FRNav.back('fx'); }
   btn.addEventListener('click', () => { if (panelOpen) closePanel(); else openPanel(); });

@@ -250,3 +250,7 @@
 .sc-cv { position: absolute; inset: 0; width: 100%; height: 100%; }
 .msg-row.fxo-row { margin-top: 40px; }
 .fx-tile[data-fx="fire"] .fx-stage { padding-top: 50px; }
+
+/* ===== v5: edge effects for every template ===== */
+.msg-row.fxo-row2 { margin-top: 22px; margin-bottom: 14px; }
+.fx-stage { padding: 28px 0; }
