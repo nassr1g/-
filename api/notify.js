@@ -33,7 +33,7 @@ async function deliver(db, messages, tokens) {
   return { sent: result.successCount, failed: result.failureCount };
 }
 
-const FXL = { fire: 'ناري 🔥', gift: 'هدية 🎁', ice: 'ثلجي ❄️', love: 'حب 💖', galaxy: 'مجرة 🌌', sakura: 'ساكورا 🌸', thunder: 'صاعقة ⚡', gold: 'ذهبي ✨' };
+const FXL = { fire: 'ناري 🔥', gift: 'هدية 🎁', ice: 'ثلجي ❄️', love: 'قلوب 💖', galaxy: 'مجرة 🌌', sakura: 'ساكورا 🌸', thunder: 'صاعقة ⚡', gold: 'ذهبي ✨' };
 const SPLG = /\|\|(?=\S)([\s\S]*?\S)\|\|/g;
 const hide = (s) => String(s || '').replace(SPLG, '••••');
 const fxText = (msg) => FXL[msg.fx] ? 'أرسل لك رسالة في قالب "' + FXL[msg.fx] + '"' : null;
@@ -118,7 +118,6 @@ async function handleReaction(db, key, uid, emoji) {
 }
 
 module.exports = async (req, res) => {
-  return res.status(200).json({ paused: true });
   if (req.method !== 'POST') return res.status(405).json({ error: 'method' });
   try {
     init();
@@ -129,6 +128,7 @@ module.exports = async (req, res) => {
     const key = String(body.key || ''), uid = decoded.uid;
     if (!/^[-\w]{10,40}$/.test(key) || !uid || uid.length > 100) return res.status(400).json({ error: 'bad-request' });
     const db = admin.database();
+    if ((await db.ref('config/pushOff').get()).val() === true) return res.status(200).json({ skipped: 'push-off' });
     const [code, out] = body.type === 'reaction'
       ? await handleReaction(db, key, uid, String(body.emoji || ''))
       : await handleMessage(db, key, uid);
