@@ -1650,7 +1650,7 @@
     if (!entry) return;
     const wasDeleted = !!entry.data.deleted;
     const nowDeleted = !!data.deleted;
-    const prevText = entry.data.text;
+    const prevText = entry.data.text, prevFx = entry.data.fx;
     entry.data = data;
     if (wasDeleted) return;
 
@@ -1663,7 +1663,7 @@
       if (swipeIcon) swipeIcon.remove();
       if (!bubble) return;
 
-      swapBubble(bubble, () => {
+      const mutDel = () => {
         bubble.innerHTML = '';
         bubble.classList.remove('sticker-bubble'); if (window.FRFx) FRFx.clear(bubble);
         if (bubble.parentElement) bubble.parentElement.classList.remove('stk-shell');
@@ -1677,7 +1677,8 @@
         meta.className = 'msg-meta';
         meta.textContent = formatTime(data.timestamp);
         bubble.appendChild(meta);
-      }, () => {
+      };
+      const doneDel = () => {
         // swap in a plain clone to drop all gesture/pointer listeners cleanly
         const cur = allMessagesByKey.get(key);
         const freshRow = row.cloneNode(true);
@@ -1685,7 +1686,13 @@
         attachDeletedGestures(freshRow, key);
         freshRow.querySelectorAll('.dust-canvas').forEach((c) => c.remove());
         allMessagesByKey.set(key, { data: cur ? cur.data : data, el: freshRow });
-      }, { fadeOthers: true });
+      };
+      if (prevFx && window.FRFx) FRFx.vanish(row, prevFx, () => {
+        mutDel(); doneDel();
+        const e2 = allMessagesByKey.get(key), nb = e2 && e2.el.querySelector('.msg-bubble');
+        if (nb) { nb.style.opacity = '0'; nb.style.transition = 'opacity .45s ease'; requestAnimationFrame(() => requestAnimationFrame(() => { nb.style.opacity = ''; setTimeout(() => { nb.style.transition = ''; }, 500); })); }
+      });
+      else swapBubble(bubble, mutDel, doneDel, { fadeOthers: true });
       return;
     }
 
@@ -2702,7 +2709,7 @@
   function dropMessageLocally(key, fancy) {
     const entry = allMessagesByKey.get(key);
     if (!entry) return;
-    if (fancy) dustVanish(entry.el, () => vanishRow(entry.el)); else vanishRow(entry.el);
+    if (fancy) { if (entry.data.fx && !entry.data.deleted && window.FRFx) FRFx.vanish(entry.el, entry.data.fx, () => vanishRow(entry.el)); else dustVanish(entry.el, () => vanishRow(entry.el)); } else vanishRow(entry.el);
     allMessagesByKey.delete(key);
   }
 

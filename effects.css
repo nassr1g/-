@@ -15,7 +15,7 @@
 .fxb { z-index: 0; }
 .fx-layer { z-index: -1; transition: opacity .4s ease; }
 .fx-layer.out { opacity: 0; }
-.msg-bubble.fx > *:not(.fxb):not(.react-burst):not(.fxo):not(.fxc) { position: relative; z-index: 1; }
+.msg-bubble.fx > *:not(.fxb):not(.react-burst):not(.fxo):not(.fxc):not(.sak-tree):not(.fx-heart) { position: relative; z-index: 1; }
 :is(.fxb, .fx-layer)::before { content: ''; position: absolute; left: -10%; right: -10%; bottom: -40%; height: 100%; transform-origin: 50% 100%;
   background: radial-gradient(ellipse at 50% 100%, rgba(var(--fg),.7), rgba(var(--fg),.25) 45%, transparent 70%); animation: fxBreath 1.6s ease-in-out infinite alternate; }
 @keyframes fxBreath { from { transform: scaleY(.8); opacity: .7; } to { transform: scaleY(1.15); opacity: 1; } }
@@ -254,3 +254,32 @@
 /* ===== v5: edge effects for every template ===== */
 .msg-row.fxo-row2 { margin-top: 22px; margin-bottom: 14px; }
 .fx-stage { padding: 28px 0; }
+
+/* ===== v6: tighter reach, sakura tree, heart corner, deletion animations ===== */
+.msg-row.fxo-row { margin-top: 36px; }
+.msg-row.fxo-row2 { margin-top: 14px; margin-bottom: 10px; }
+.msg-row.fxo-row3 { margin-top: 62px; margin-bottom: 8px; }
+.fx-tile[data-fx="sakura"] .fx-stage { padding-top: 74px; }
+.sak-tree { position: absolute; right: 18px; bottom: calc(100% - 6px); width: 62px; height: 70px; z-index: -1; pointer-events: none; transform-origin: 50% 100%; animation: sakSway 5s ease-in-out infinite alternate; }
+.sak-tree.bar { right: 64px; bottom: calc(100% - 4px); }
+@keyframes sakSway { from { transform: rotate(-2.2deg); } to { transform: rotate(2.2deg); } }
+.fx-heart { position: absolute; top: -12px; right: 12px; width: 26px; height: 24px; z-index: -1; pointer-events: none; transform: rotate(12deg); transform-origin: 50% 100%; animation: heartBeat 1.7s ease-in-out infinite; filter: drop-shadow(0 0 6px rgba(255,80,150,.6)); }
+.fx-heart.bar { top: auto; bottom: calc(100% - 8px); right: 34px; }
+@keyframes heartBeat { 0%, 55%, 100% { transform: rotate(12deg) scale(1); } 12% { transform: rotate(12deg) scale(1.18); } 24% { transform: rotate(12deg) scale(1); } 34% { transform: rotate(12deg) scale(1.1); } }
+.msg-bubble.vn { animation-fill-mode: forwards; animation-timing-function: ease-in; }
+.msg-bubble.vn-fire { animation: vnFire .78s forwards; }
+@keyframes vnFire { 0% { filter: none; } 35% { filter: brightness(1.6) saturate(1.4); } 100% { filter: brightness(.15) sepia(.9); opacity: 0; transform: translateY(-10px) scale(.95); } }
+.msg-bubble.vn-ice { animation: vnIce .62s forwards; }
+@keyframes vnIce { 0% { filter: none; } 30% { filter: brightness(1.5) saturate(.5); transform: scale(1.02); } 100% { filter: blur(3px) brightness(1.8); opacity: 0; transform: scale(1.12); } }
+.msg-bubble.vn-love { animation: vnLove .7s forwards; }
+@keyframes vnLove { 0% { transform: scale(1); } 20% { transform: scale(1.09); } 40% { transform: scale(.96); } 100% { filter: blur(4px); opacity: 0; transform: scale(.8) translateY(-14px); } }
+.msg-bubble.vn-galaxy { animation: vnGalaxy .72s forwards; }
+@keyframes vnGalaxy { 0% { transform: scale(1) rotate(0); } 100% { filter: blur(4px) brightness(1.8); opacity: 0; transform: scale(.04) rotate(40deg); } }
+.msg-bubble.vn-sakura { animation: vnSakura .76s forwards; }
+@keyframes vnSakura { 0% { transform: none; } 100% { filter: blur(3px); opacity: 0; transform: translateY(12px) rotate(-3deg) scale(.96); } }
+.msg-bubble.vn-thunder { animation: vnThunder .64s forwards; }
+@keyframes vnThunder { 0% { filter: brightness(3.2); transform: translateX(-5px); } 12% { filter: brightness(1); transform: translateX(5px); } 24% { filter: brightness(2.4); transform: translateX(-4px); } 38% { filter: brightness(1); transform: translateX(3px); } 100% { filter: brightness(.3) blur(2px); opacity: 0; transform: scale(.92); } }
+.msg-bubble.vn-gold { animation: vnGold .7s forwards; }
+@keyframes vnGold { 0% { filter: none; } 35% { filter: brightness(1.7) saturate(1.3); } 100% { filter: brightness(2) blur(4px); opacity: 0; transform: scale(1.06) translateY(-8px); } }
+.msg-bubble.vn-gift { animation: vnGift .6s forwards; }
+@keyframes vnGift { 0% { transform: scale(1); } 25% { transform: scale(1.12) rotate(-3deg); } 100% { opacity: 0; transform: scale(.05) rotate(14deg); } }

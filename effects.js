@@ -54,14 +54,14 @@
   function index(el, key) {
     el.querySelectorAll('.spl').forEach((s, i) => { s.dataset.i = i; if (key && opened.has(key + ':' + i)) s.classList.add('open'); });
   }
-  function burst(anchor, x, y, kind, n) {
-    const host = anchor.closest('.msg-row'); if (!host || host.querySelectorAll('.fx-burst').length > 3) return;
+  function burst(anchor, x, y, kind, n, sp) {
+    const host = anchor.closest('.msg-row'); if (!host || host.querySelectorAll('.fx-burst').length > 5) return;
     const r = host.getBoundingClientRect(), w = mk('div', 'fx-burst'), K = B[kind] || B.gold;
     w.style.left = (x - r.left) + 'px'; w.style.top = (y - r.top) + 'px';
     for (let i = 0; i < n; i++) {
       const s = mk('span', null, K.g[Math.random() * K.g.length | 0]);
       s.style.color = K.c[Math.random() * K.c.length | 0];
-      s.style.setProperty('--dx', ((Math.random() - 0.5) * 120) + 'px');
+      s.style.setProperty('--dx', ((Math.random() - 0.5) * 120 * (sp || 1)) + 'px');
       s.style.setProperty('--dy', (-(40 + Math.random() * 80)) + 'px');
       s.style.setProperty('--rot', ((Math.random() - 0.5) * 140) + 'deg');
       s.style.fontSize = rnd(11, 22).toFixed(0) + 'px'; s.style.animationDelay = (i * 28) + 'ms';
@@ -114,7 +114,8 @@
   const Fire = (() => {
     const VS = 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}';
     const HEAD = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\n'
-      + 'uniform vec2 uRes;uniform vec4 uBox;uniform float uT,uH,uI,uR,uF;\n'
+      + 'float sst(float a,float b,float x){float t=clamp((x-a)/(b-a),0.,1.);return t*t*(3.-2.*t);}\n#define smoothstep(a,b,x) sst(a,b,x)\n'
+      + 'uniform vec2 uRes,uA;uniform vec4 uBox;uniform float uT,uH,uI,uR,uF,uW;\n'
       + 'float hash(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}\n'
       + 'float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}\n'
       + 'float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<5;i++){v+=a*noise(p);p=p*2.02+vec2(11.7,5.3);a*=.5;}return v;}\n'
@@ -143,7 +144,7 @@
         + 'float mist=fbm(vec2(s*.025,d*.05-uT*.35))*smoothstep(R*1.5,0.,max(d,0.))*smoothstep(-2.,2.,d);o=ov(o,pm(vec3(.75,.92,1.),mist*.2));\n'
         + 'for(int k=0;k<2;k++){float per=k==0?13.:8.;float sc=s+(k==0?0.:4.3);float id=floor(sc/per),fr=fract(sc/per);float hh=(pow(h21(vec2(id,float(k)+1.)),1.7)*.85+.15)*R*(k==0?.8:.4);float sp=hh*(1.-abs(fr-.5)*2.);\n'
         + 'float m=smoothstep(.9,-.9,d-sp)*smoothstep(-1.5,.5,d);float tt=clamp(d/max(sp,1.),0.,1.);vec3 col=mix(vec3(.93,.99,1.),vec3(.35,.72,1.),tt);col*=fr<.5?1.:.8;\n'
-        + 'float sh=pow(.5+.5*sin(sc*.05-uT*2.6),10.);col+=sh*.6;col=mix(col,vec3(1.),smoothstep(1.6,0.,abs(d-sp))*.5);o=ov(o,pm(col,m*(k==0?.95:.7)));}\n'
+        + 'float sh=pow(.5+.5*sin(sc*.05-uT*2.6),10.);col=clamp(col+sh*.6,0.,1.);col=mix(col,vec3(1.),smoothstep(1.6,0.,abs(d-sp))*.5);o=ov(o,pm(col,m*(k==0?.95:.7)));}\n'
         + 'float vis=smoothstep(R*1.6,R*.1,max(d,0.))*smoothstep(-1.,3.,d);\n'
         + 'o=ov(o,parts(px,vis,vec2(8.,34.),22.,0,.16,vec3(.85,.95,1.),vec3(1.)));o=ov(o,parts(px,vis,vec2(0.,6.),30.,3,.07,vec3(.7,.9,1.),vec3(1.)));return o;}',
       love: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float ph=fract(uT*.9);float b=exp(-ph*8.)+.55*exp(-max(ph-.26,0.)*9.)*step(.26,ph);float dd=max(d,0.);\n'
@@ -159,9 +160,9 @@
         + 'if(tt<.8&&h21(vec2(cy,3.))>.3){vec2 dir=normalize(vec2(1.,.55));vec2 st=vec2(c.x+(h21(vec2(cy,5.))-.5)*h.x*1.6-uH*.6,c.y-h.y-uH*.9);vec2 head=st+dir*tt*uH*3.2;vec2 tail=head-dir*uH*.9;vec2 pa=px-tail,ba=head-tail;float k=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);float ds=length(pa-ba*k);\n'
         + 'float env=smoothstep(0.,.1,tt)*smoothstep(.8,.5,tt);o=ov(o,pm(vec3(.85,.92,1.),smoothstep(2.2,0.,ds)*k*k*env));}\n'
         + 'return o;}',
-      sakura: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float dd=max(d,0.);float R=uH*1.3;float vis=smoothstep(R,R*.1,dd)*smoothstep(-1.,3.,d);\n'
-        + 'vec4 o=pm(vec3(1.,.6,.78),exp(-dd/(uH*.35))*.18*smoothstep(-3.,1.,d));\n'
-        + 'o=ov(o,parts(px,vis,vec2(14.,34.),34.,2,.26,vec3(1.,.72,.84),vec3(1.,.9,.95)));o=ov(o,parts(px+33.,vis*.8,vec2(10.,22.),26.,2,.16,vec3(1.,.62,.78),vec3(1.,.85,.92)));return o;}',
+      sakura: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float dy=px.y-uA.y;float cx=uA.x+max(dy,0.)*(uW/34.);float hw=18.+max(dy,0.)*.34;float m=smoothstep(hw,hw*.4,abs(px.x-cx))*smoothstep(0.,10.,dy);\n'
+        + 'float vis=m*smoothstep(-1.,2.,d);float dd=max(d,0.);vec4 o=pm(vec3(1.,.6,.78),exp(-dd/(uH*.35))*.1*smoothstep(-3.,1.,d));\n'
+        + 'o=ov(o,parts(px,vis,vec2(uW,34.),30.,2,.8,vec3(1.,.72,.84),vec3(1.,.9,.95)));o=ov(o,parts(px+33.,vis*.85,vec2(uW*.7,22.),22.,2,.7,vec3(1.,.62,.78),vec3(1.,.85,.92)));return o;}',
       thunder: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float s=es(p,h);float dd=max(d,0.);vec2 c=px-p;float pulse=.5+.5*sin(uT*3.1);\n'
         + 'vec4 o=pm(vec3(.35,.5,1.),exp(-dd/(uH*.4))*(.16+.12*pulse)*smoothstep(-3.,1.,d));\n'
         + 'for(int k=0;k<3;k++){float sd=float(k)+1.;float seg=smoothstep(.42,.7,fbm(vec2(s*.012+sd*7.,uT*.9+sd)));\n'
@@ -191,16 +192,24 @@
         + 'float f=clamp((1.-t)*.95+(turb(px)-.5)*1.9,0.,1.);gl_FragColor=ramp(f,uI);}'
     };
     Object.keys(FX).forEach((k) => { FS[k] = HEAD + LIB + FX[k] + MAIN; });
-    let raf = 0, last = 0; const act = new Set();
-    function glInit(cv, mode) {
-      const gl = cv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false }); if (!gl) return null;
+    let raf = 0, last = 0, shared = null, lost = false; const act = new Set(), progs = {};
+    function sharedGL() {
+      if (shared) return shared;
+      const cv = document.createElement('canvas'); cv.width = 720; cv.height = 520;
+      const gl = cv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: false }); if (!gl) return null;
+      const bf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      cv.addEventListener('webglcontextlost', (ev) => { ev.preventDefault(); lost = true; });
+      cv.addEventListener('webglcontextrestored', () => { shared = null; lost = false; Object.keys(progs).forEach((k) => { delete progs[k]; }); });
+      return (shared = { cv, gl, bf });
+    }
+    function prog(mode) {
+      if (progs[mode] !== undefined) return progs[mode];
+      const S = sharedGL(); if (!S) return null; const gl = S.gl;
       const sh = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) { console.warn('fx shader', mode, gl.getShaderInfoLog(x)); return null; } return x; };
-      const v = sh(gl.VERTEX_SHADER, VS), f = sh(gl.FRAGMENT_SHADER, FS[mode]); if (!v || !f) return null;
-      const pr = gl.createProgram(); gl.attachShader(pr, v); gl.attachShader(pr, f); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
-      gl.useProgram(pr); const bf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, bf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-      const l = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
-      const u = {}; ['uRes', 'uBox', 'uT', 'uH', 'uI', 'uR', 'uF'].forEach((n) => { u[n] = gl.getUniformLocation(pr, n); });
-      return { gl, u };
+      const v = sh(gl.VERTEX_SHADER, VS), f = sh(gl.FRAGMENT_SHADER, FS[mode]); if (!v || !f) return (progs[mode] = false);
+      const pr = gl.createProgram(); gl.attachShader(pr, v); gl.attachShader(pr, f); gl.linkProgram(pr); if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return (progs[mode] = false);
+      const u = {}; ['uRes', 'uBox', 'uT', 'uH', 'uI', 'uR', 'uF', 'uA', 'uW'].forEach((n) => { u[n] = gl.getUniformLocation(pr, n); });
+      return (progs[mode] = { pr, u, l: gl.getAttribLocation(pr, 'p') });
     }
     function loop(now) {
       raf = 0; if (!act.size) return;
@@ -209,25 +218,23 @@
       if (act.size) raf = requestAnimationFrame(loop);
     }
     function make(cv, o) {
-      const e = { cv, o, w: 0, h: 0, t: 0, on: false, boost: 0, box: null, g: null,
-        size(w, h) { e.cv.width = w; e.cv.height = h; e.w = w; e.h = h; },
+      const e = { cv, o, ctx: cv.getContext('2d'), w: 0, h: 0, t: 0, on: false, boost: 0, box: null,
+        size(w, h) { cv.width = w; cv.height = h; e.w = w; e.h = h; },
         setOn(v) {
           if (v === e.on) return;
-          if (v) {
-            if (act.size >= 12) return; e.g = glInit(e.cv, o.mode); if (!e.g) return;
-            e.on = true; e.t = Math.random() * 40; act.add(e); if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); }
-          } else {
-            e.on = false; act.delete(e);
-            if (e.g) { const x = e.g.gl.getExtension('WEBGL_lose_context'); if (x) x.loseContext(); e.g = null; const n = e.cv.cloneNode(false); e.cv.replaceWith(n); e.cv = n; }
-          }
+          if (v) { if (act.size >= 12 || !sharedGL()) return; e.on = true; e.t = Math.random() * 40; act.add(e); if (!raf) { last = performance.now(); raf = requestAnimationFrame(loop); } }
+          else { e.on = false; act.delete(e); e.ctx.clearRect(0, 0, e.w, e.h); }
         },
         step(dt) {
-          const g = e.g; if (!g) return; const gl = g.gl, u = g.u; e.t += dt; if (e.boost > 0) e.boost -= dt;
-          const b = e.box || { x: 0, y: 0, w: 0, h: 0 };
-          gl.viewport(0, 0, e.w, e.h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-          gl.uniform2f(u.uRes, e.w, e.h); gl.uniform4f(u.uBox, b.x, b.y, b.w, b.h); gl.uniform1f(u.uT, e.t);
+          const S = shared; if (!S || lost || !e.w || e.w > 720 || e.h > 520) return; const P = prog(o.mode); if (!P) return;
+          const gl = S.gl, u = P.u; e.t += dt; if (e.boost > 0) e.boost -= dt;
+          const b = e.box || { x: 0, y: 0, w: 0, h: 0 }, A = o.A || [0, 0];
+          gl.useProgram(P.pr); gl.bindBuffer(gl.ARRAY_BUFFER, S.bf); gl.enableVertexAttribArray(P.l); gl.vertexAttribPointer(P.l, 2, gl.FLOAT, false, 0, 0);
+          gl.enable(gl.SCISSOR_TEST); gl.viewport(0, 0, e.w, e.h); gl.scissor(0, 0, e.w, e.h); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+          gl.uniform2f(u.uRes, e.w, e.h); gl.uniform4f(u.uBox, b.x, b.y, b.w, b.h); gl.uniform1f(u.uT, e.t); gl.uniform2f(u.uA, A[0], A[1]); gl.uniform1f(u.uW, o.W == null ? 14 : o.W);
           gl.uniform1f(u.uH, o.H * (e.boost > 0 ? 1.3 : 1)); gl.uniform1f(u.uI, o.env ? o.env(e.t) : 1); gl.uniform1f(u.uR, o.R || 0); gl.uniform1f(u.uF, o.F || 1);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
+          e.ctx.clearRect(0, 0, e.w, e.h); e.ctx.drawImage(S.cv, 0, S.cv.height - e.h, e.w, e.h, 0, 0, e.w, e.h);
         } };
       return e;
     }
@@ -236,18 +243,33 @@
   const tileIO = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((x) => { const f = x.target._fe; if (f) { f.vis = x.isIntersecting; f.setOn(f.vis && panelVis); } })) : null;
   const demoFires = [], fro = 'ResizeObserver' in window ? new ResizeObserver((es) => es.forEach((x) => { if (x.target._fe) x.target._fe.resize(); })) : null;
   const FXP = {
-    fire: [{ pl: 24, pt: 56, pr: 24, pb: 14, H: 34, R: 17 }, { pl: 24, pt: 80, pr: 24, pb: 16, H: 48, R: 28 }],
-    other: [{ pl: 40, pt: 60, pr: 40, pb: 40, H: 34, R: 17 }, { pl: 30, pt: 80, pr: 30, pb: 24, H: 54, R: 28 }]
+    fire: [{ pl: 20, pt: 48, pr: 20, pb: 12, H: 30, R: 17 }, { pl: 20, pt: 70, pr: 20, pb: 14, H: 42, R: 28 }],
+    other: [{ pl: 30, pt: 44, pr: 30, pb: 30, H: 26, R: 17 }, { pl: 26, pt: 66, pr: 26, pb: 22, H: 42, R: 28 }],
+    sakura: [{ pl: 40, pt: 84, pr: 40, pb: 40, H: 26, R: 17 }, { pl: 30, pt: 100, pr: 30, pb: 34, H: 42, R: 28 }]
   };
+  const TREE = '<svg viewBox="0 0 80 90" width="100%" height="100%"><defs><radialGradient id="skA" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#ffe6f0"/><stop offset=".6" stop-color="#ffb3d0"/><stop offset="1" stop-color="#f27aa8"/></radialGradient><linearGradient id="skT" x1="0" x2="1"><stop offset="0" stop-color="#6b3f2c"/><stop offset="1" stop-color="#a06646"/></linearGradient></defs>'
+    + '<path d="M33 90C35 76 34 66 30 56C28 50 29 46 33 42L42 42C43 50 47 54 49 60C51 68 47 80 48 90Z" fill="url(#skT)"/>'
+    + '<path d="M32 58C25 54 21 49 17 42M46 60C53 55 57 49 63 42" stroke="#7d4b35" stroke-width="3.2" fill="none" stroke-linecap="round"/>'
+    + '<g fill="url(#skA)"><circle cx="40" cy="26" r="17"/><circle cx="22" cy="34" r="13"/><circle cx="58" cy="33" r="14"/><circle cx="31" cy="15" r="12"/><circle cx="50" cy="14" r="12"/><circle cx="40" cy="40" r="12"/><circle cx="13" cy="44" r="8"/><circle cx="67" cy="44" r="8"/></g>'
+    + '<g fill="#fff" opacity=".9"><circle cx="34" cy="22" r="2.2"/><circle cx="48" cy="28" r="2"/><circle cx="26" cy="36" r="2"/><circle cx="56" cy="22" r="2.2"/><circle cx="40" cy="12" r="1.8"/><circle cx="62" cy="38" r="1.8"/><circle cx="18" cy="42" r="1.8"/></g>'
+    + '<g fill="#f06a9c"><circle cx="40" cy="30" r="1.7"/><circle cx="30" cy="30" r="1.5"/><circle cx="52" cy="38" r="1.6"/><circle cx="23" cy="26" r="1.5"/><circle cx="60" cy="30" r="1.5"/><circle cx="44" cy="19" r="1.4"/></g></svg>';
+  const HEART = '<svg viewBox="0 0 32 30" width="100%" height="100%"><defs><linearGradient id="hrA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7db3"/><stop offset="1" stop-color="#d6336c"/></linearGradient></defs>'
+    + '<path d="M16 29C6 21 1 15 1 9C1 4 5 1 9 1C12 1 15 3 16 6C17 3 20 1 23 1C27 1 31 4 31 9C31 15 26 21 16 29Z" fill="url(#hrA)"/><ellipse cx="9" cy="8" rx="3" ry="2" fill="#fff" opacity=".45" transform="rotate(-30 9 8)"/></svg>';
+  function decor(host, k, bar) {
+    const a = [];
+    if (k === 'sakura') { const t = mk('div', 'sak-tree' + (bar ? ' bar' : '')); t.innerHTML = TREE; host.appendChild(t); a.push(t); }
+    if (k === 'love') { const h = mk('div', 'fx-heart' + (bar ? ' bar' : '')); h.innerHTML = HEART; host.appendChild(h); a.push(h); }
+    return a;
+  }
   function attachFx(host, row, bar, kind) {
     const cv = mk('canvas', 'fxc'); host.appendChild(cv);
     const P = (FXP[kind] || FXP.other)[bar ? 1 : 0];
-    const e = Fire.make(cv, { mode: kind, H: P.H, R: P.R, F: 1 });
+    const e = Fire.make(cv, { mode: kind, H: P.H, R: P.R, F: 1, W: row && row.classList.contains('mine') ? -22 : 22 });
     e.kind = kind;
     e.resize = () => {
       const w = host.offsetWidth, h = host.offsetHeight; if (!w || !h) return;
       e.size(w + P.pl + P.pr, h + P.pt + P.pb); e.cv.style.cssText = 'left:' + (-P.pl) + 'px;top:' + (-P.pt) + 'px;width:' + e.w + 'px;height:' + e.h + 'px';
-      e.box = { x: P.pl, y: P.pt, w, h };
+      e.box = { x: P.pl, y: P.pt, w, h }; e.o.A = [P.pl + w - (bar ? 95 : 49), P.pt - 46];
     };
     const base = e.setOn; e.setOn = (v) => { if (v) e.resize(); if (v && !e.box) return; base(v); };
     host._fe = e; if (row) row._fire = e; if (fro) fro.observe(host);
@@ -343,7 +365,7 @@
     bubble.classList.add('fx'); bubble.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); bubble.insertBefore(f, bubble.firstChild);
     if (k === 'gift') { bubble.insertBefore(cover(), f.nextSibling); if (mine || opened.has(key)) bubble.classList.add('opened'); }
-    attachFx(bubble, row, false, k); row.classList.add(k === 'fire' ? 'fxo-row' : 'fxo-row2');
+    attachFx(bubble, row, false, k); decor(bubble, k, false); row.classList.add(k === 'fire' ? 'fxo-row' : k === 'sakura' ? 'fxo-row3' : 'fxo-row2');
     watch(row);
   }
   function tap(e, key) {
@@ -364,8 +386,18 @@
   }
   function edited(textEl, key) { opened.forEach((v) => { if (v.indexOf(key + ':') === 0) opened.delete(v); }); index(textEl, key); watch(textEl.closest('.msg-row')); }
   function clear(b) {
+    [].slice.call(b.classList).forEach((c) => { if (c.indexOf('vn') === 0) b.classList.remove(c); });
     b.classList.remove('fx', 'opened', 'opening', 'fx-hit', 'revealing', 'flash'); delete b.dataset.fx;
     const r = b.closest('.msg-row'); if (r) r.classList.remove('fxwatch', 'fx-live', 'fxo-row');
+  }
+  const VN = { fire: [18, 780], ice: [22, 620], love: [16, 700], galaxy: [20, 720], sakura: [20, 760], thunder: [14, 640], gold: [26, 700], gift: [24, 600] };
+  function vanish(row, k, done) {
+    const b = row.querySelector('.msg-bubble'), v = VN[k];
+    if (!b || !v || !row.isConnected) { done(); return; }
+    if (b._fe) b._fe.boost = k === 'fire' ? 1 : 0;
+    const r = b.getBoundingClientRect(); burst(b, r.left + r.width / 2, r.top + r.height / 2, k, v[0], 1.7);
+    b.classList.add('vn', 'vn-' + k); if (navigator.vibrate) navigator.vibrate(k === 'thunder' ? [20, 30, 30] : 14);
+    setTimeout(() => { b.style.opacity = '0'; done(); }, v[1]);
   }
   const quote = (d) => d.fx === 'gift' ? 'رسالة في قالب هدية 🎁' : mask(d.text);
   const search = (m) => (m.fx === 'gift' && !opened.has(m.k) && m.senderUid !== (C().uid && C().uid())) ? 'رسالة في قالب هدية' : mask(m.text);
@@ -376,8 +408,8 @@
   let outer = null, outerK = '', panelVis = false, cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
 
   function applyComposer() {
-    if (outer && outerK !== cur) { const o = outer; outer = null; o.cv.style.transition = 'opacity .35s'; o.cv.style.opacity = 0; setTimeout(() => { o.setOn(false); o.cv.remove(); if (glass._fe === o) glass._fe = null; }, 400); }
-    if (cur && !outer) { outer = attachFx(glass, null, true, cur); outerK = cur; outer.setOn(true); }
+    if (outer && outerK !== cur) { const o = outer; outer = null; o.cv.style.transition = 'opacity .35s'; o.cv.style.opacity = 0; (o.extras || []).forEach((x) => { x.style.transition = 'opacity .35s'; x.style.opacity = 0; }); setTimeout(() => { o.setOn(false); o.cv.remove(); (o.extras || []).forEach((x) => x.remove()); if (glass._fe === o) glass._fe = null; }, 400); }
+    if (cur && !outer) { outer = attachFx(glass, null, true, cur); outer.extras = decor(glass, cur, true); outerK = cur; outer.setOn(true); }
     if (cur) {
       glass.dataset.fx = cur;
       if (!layer || layer.dataset.k !== cur) {
@@ -439,7 +471,7 @@
     const b = mk('div', 'msg-bubble fx'); b.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); b.appendChild(f);
     if (k === 'gift') b.appendChild(cover());
-    { const de = attachFx(b, null, false, k); de.vis = false; demoFires.push(de); if (tileIO) tileIO.observe(b); }
+    { const de = attachFx(b, null, false, k); decor(b, k, false); de.vis = false; demoFires.push(de); if (tileIO) tileIO.observe(b); }
     b.appendChild(mk('div', 'msg-text', 'مرحبًا بك'));
     return b;
   }
@@ -485,5 +517,5 @@
   btn.addEventListener('click', () => { if (panelOpen) closePanel(); else openPanel(); });
   document.addEventListener('pointerdown', (e) => { if (panelOpen && !e.target.closest('.fx-panel') && !e.target.closest('#fxToggleBtn')) closePanel(); }, true);
 
-  window.FRFx = { screen: (k) => { if (k !== 'gift') screen(k); }, after, tap, edited, clear, quote, search, outgoing, closePanel, isOpen: () => panelOpen || !!cur || splAll };
+  window.FRFx = { vanish, screen: (k) => { if (k !== 'gift') screen(k); }, after, tap, edited, clear, quote, search, outgoing, closePanel, isOpen: () => panelOpen || !!cur || splAll };
 })();
