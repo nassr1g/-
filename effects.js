@@ -135,7 +135,7 @@
       + 'vec2 cen=(id+.2+.6*r)*S;cen.x+=sin(uT*1.4+r3*6.28)*S*.2;vec2 v=g-cen;float sz=S*(.12+.14*r3);float tw=.6+.4*sin(uT*3.+r3*40.);vec3 col=mix(ca,cb,r3);float m=0.;\n'
       + 'if(kind==0){m=smoothstep(1.,.25,length(v)/sz);}\n'
       + 'else if(kind==1){vec2 w=rot(v,(r.x-.5)*.6)/(sz*1.9);w=vec2(w.x,-w.y)+vec2(0.,.55);float dd=sdHeart(w)*sz*1.9;m=smoothstep(.9,-.6,dd);col=mix(col,vec3(1.),.35*clamp(w.y-.5,0.,1.));}\n'
-      + 'else if(kind==2){vec2 w=rot(v,r3*6.28+uT*(r.x-.5)*2.)/(sz*1.5);float t=clamp(w.y*.5+.5,0.,1.);float wd=.62*pow(max(sin(3.14159*t),0.),.7);if(w.y>.8)wd*=1.-.5*smoothstep(.8,1.,w.y)*(1.-smoothstep(0.,.25,abs(w.x)));m=smoothstep(.1,0.,abs(w.x)-wd)*smoothstep(1.1,.95,abs(w.y));col=mix(col,vec3(1.,.97,.98),.5*(1.-t));}\n'
+      + 'else if(kind==2){vec2 w=rot(v,r3*6.28+uT*(r.x-.5)*2.)/(sz*.95);float t=clamp(w.y*.5+.5,0.,1.);float wd=.62*pow(max(sin(3.14159*t),0.),.7);if(w.y>.8)wd*=1.-.5*smoothstep(.8,1.,w.y)*(1.-smoothstep(0.,.25,abs(w.x)));m=smoothstep(.1,0.,abs(w.x)-wd)*smoothstep(1.1,.95,abs(w.y));col=mix(col,vec3(1.,.97,.98),.5*(1.-t));}\n'
       + 'else if(kind==3){vec2 w=v/(sz*1.8);m=spark(w)*tw;}\n'
       + 'else{vec2 w=rot(v,r3*6.28+uT*(r.x-.5)*6.)/sz;m=smoothstep(.2,0.,max(abs(w.x)-1.,abs(w.y)-.45));col=.55+.45*cos(6.28*(r3*3.+vec3(0.,.33,.66)));}\n'
       + 'o=ov(o,pm(col,clamp(m,0.,1.)*vis));}}return o;}\n';
@@ -148,7 +148,7 @@
         + 'float vis=smoothstep(R*1.6,R*.1,max(d,0.))*smoothstep(-1.,3.,d);\n'
         + 'o=ov(o,parts(px,vis,vec2(8.,34.),22.,0,.16,vec3(.85,.95,1.),vec3(1.)));o=ov(o,parts(px,vis,vec2(0.,6.),30.,3,.07,vec3(.7,.9,1.),vec3(1.)));return o;}',
       love: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float ph=fract(uT/1.2);float b=exp(-ph*8.)+.55*exp(-max(ph-.26,0.)*9.)*step(.26,ph);\n'
-        + 'vec2 hv=px-uA;vec2 w=vec2(hv.x,-hv.y)/uF+vec2(0.,.55);float hd=sdHeart(w)*uF;float k=5.;float hh=clamp(.5+.5*(hd-d)/k,0.,1.);float dU=mix(hd,d,hh)-k*hh*(1.-hh);float dd=max(dU,0.);\n'
+        + 'vec2 hv=px-uA;float hs=uF*(1.+.16*b);vec2 w=vec2(hv.x,-hv.y)/hs+vec2(0.,.55);float hd=sdHeart(w)*hs;float k=5.;float hh=clamp(.5+.5*(hd-d)/k,0.,1.);float dU=mix(hd,d,hh)-k*hh*(1.-hh);float dd=max(dU,0.);\n'
         + 'vec4 o=pm(vec3(1.,.28,.55),exp(-dd/(uH*.3))*(.22+.38*b)*smoothstep(-3.,1.,dU));o=ov(o,pm(vec3(1.,.82,.92),smoothstep(3.2,0.,abs(dU-.9))*(.85+.15*b)));\n'
         + 'float vis=smoothstep(uH*2.,uH*.2,dd)*smoothstep(-1.,3.,dU);\n'
         + 'o=ov(o,parts(px,vis,vec2(0.,-30.),28.,1,.3,vec3(1.,.3,.55),vec3(1.,.62,.78)));o=ov(o,parts(px+17.,vis,vec2(0.,-18.),24.,3,.08,vec3(1.,.8,.9),vec3(1.)));return o;}',
@@ -161,9 +161,9 @@
         + 'if(tt<.8&&h21(vec2(cy,3.))>.3){vec2 dir=normalize(vec2(1.,.55));vec2 st=vec2(c.x+(h21(vec2(cy,5.))-.5)*h.x*1.6-uH*.6,c.y-h.y-uH*.9);vec2 head=st+dir*tt*uH*3.2;vec2 tail=head-dir*uH*.9;vec2 pa=px-tail,ba=head-tail;float k=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);float ds=length(pa-ba*k);\n'
         + 'float env=smoothstep(0.,.1,tt)*smoothstep(.8,.5,tt);o=ov(o,pm(vec3(.85,.92,1.),smoothstep(2.2,0.,ds)*k*k*env));}\n'
         + 'return o;}',
-      sakura: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float dy=px.y-uA.y;float cx=uA.x+max(dy,0.)*(uW/34.);float hw=18.+max(dy,0.)*.34;float m=smoothstep(hw,hw*.4,abs(px.x-cx))*smoothstep(0.,10.,dy);\n'
+      sakura: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float dy=px.y-uA.y;float cx=uA.x+max(dy,0.)*(uW/34.);float hw=14.+max(dy,0.)*.3;float m=smoothstep(hw,hw*.4,abs(px.x-cx))*smoothstep(0.,10.,dy);\n'
         + 'float vis=m*smoothstep(-1.,2.,d);float dd=max(d,0.);vec4 o=pm(vec3(1.,.6,.78),exp(-dd/(uH*.35))*.1*smoothstep(-3.,1.,d));\n'
-        + 'o=ov(o,parts(px,vis,vec2(uW,34.),30.,2,.8,vec3(1.,.72,.84),vec3(1.,.9,.95)));o=ov(o,parts(px+33.,vis*.85,vec2(uW*.7,22.),22.,2,.7,vec3(1.,.62,.78),vec3(1.,.85,.92)));return o;}',
+        + 'o=ov(o,parts(px,vis,vec2(uW,34.),24.,2,.8,vec3(1.,.72,.84),vec3(1.,.9,.95)));o=ov(o,parts(px+33.,vis*.85,vec2(uW*.7,22.),18.,2,.7,vec3(1.,.62,.78),vec3(1.,.85,.92)));return o;}',
       thunder: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float s=es(p,h);float dd=max(d,0.);vec2 c=px-p;float pulse=.5+.5*sin(uT*3.1);\n'
         + 'vec4 o=pm(vec3(.35,.5,1.),exp(-dd/(uH*.4))*(.16+.12*pulse)*smoothstep(-3.,1.,d));\n'
         + 'for(int k=0;k<3;k++){float sd=float(k)+1.;float seg=smoothstep(.42,.7,fbm(vec2(s*.012+sd*7.,uT*.9+sd)));\n'
@@ -246,28 +246,28 @@
   const FXP = {
     fire: [{ pl: 20, pt: 48, pr: 20, pb: 12, H: 30, R: 17 }, { pl: 20, pt: 70, pr: 20, pb: 14, H: 42, R: 28 }],
     other: [{ pl: 30, pt: 44, pr: 30, pb: 30, H: 26, R: 17 }, { pl: 26, pt: 66, pr: 26, pb: 22, H: 42, R: 28 }],
-    sakura: [{ pl: 40, pt: 60, pr: 40, pb: 40, H: 26, R: 17 }, { pl: 30, pt: 72, pr: 30, pb: 34, H: 42, R: 28 }]
+    sakura: [{ pl: 46, pt: 50, pr: 46, pb: 44, H: 26, R: 17 }, { pl: 30, pt: 62, pr: 30, pb: 34, H: 42, R: 28 }]
   };
-  const TREE = '<svg viewBox="0 0 50 60" width="100%" height="100%"><defs><radialGradient id="skA" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#ffe6f0"/><stop offset=".6" stop-color="#ffb3d0"/><stop offset="1" stop-color="#f27aa8"/></radialGradient></defs>'
-    + '<g fill="none" stroke="#7a4a35" stroke-linecap="round"><path d="M13 60C12 50 21 46 23 37C25 29 19 23 25 14" stroke-width="2.6"/><path d="M23 38C29 36 33 31 37 25" stroke-width="1.8"/><path d="M20 28C16 27 13 24 11 20" stroke-width="1.4"/></g>'
-    + '<g fill="url(#skA)"><circle cx="26" cy="11" r="8"/><circle cx="18" cy="15" r="6"/><circle cx="33" cy="15" r="6.5"/><circle cx="38" cy="24" r="5.5"/><circle cx="11" cy="19" r="4.5"/></g>'
-    + '<g fill="#fff" opacity=".9"><circle cx="24" cy="9" r="1.5"/><circle cx="31" cy="13" r="1.4"/><circle cx="17" cy="14" r="1.3"/><circle cx="38" cy="23" r="1.3"/><circle cx="11" cy="18" r="1.2"/></g><g fill="#f06a9c"><circle cx="28" cy="10" r="1.2"/><circle cx="21" cy="17" r="1.1"/><circle cx="35" cy="18" r="1.1"/></g></svg>';
+  const flw = (x, y, r) => { let s = '<g transform="translate(' + x + ' ' + y + ')">'; for (let i = 0; i < 5; i++) s += '<ellipse cx="0" cy="' + (-r * .62) + '" rx="' + (r * .5) + '" ry="' + (r * .68) + '" transform="rotate(' + i * 72 + ')" fill="#ffc9dc" stroke="#f08fb2" stroke-width=".25"/>'; return s + '<circle r="' + (r * .24) + '" fill="#e0507f"/></g>'; };
+  const TREE = '<svg viewBox="0 0 100 36" width="100%" height="100%" overflow="visible"><g fill="none" stroke="#6b4030" stroke-linecap="round"><path d="M101 35C84 31 70 25 58 21C44 16 30 15 14 7" stroke-width="2.4"/><path d="M80 29C84 21 90 15 96 11" stroke-width="1.4"/><path d="M60 21C62 14 60 9 64 4" stroke-width="1.3"/><path d="M40 16C38 11 34 9 30 10" stroke-width="1.2"/><path d="M70 24C74 22 80 22 84 24" stroke-width="1.1"/></g>'
+    + '<g fill="#f6a5c0"><ellipse cx="13" cy="5" rx="1.6" ry="2.4"/><ellipse cx="65" cy="2.5" rx="1.5" ry="2.2"/><ellipse cx="99" cy="9" rx="1.4" ry="2"/></g>'
+    + flw(16, 7, 4.2) + flw(29, 10, 3.5) + flw(42, 14, 4.4) + flw(58, 18, 4) + flw(71, 22, 3.4) + flw(88, 14, 4.2) + flw(96, 10, 3.2) + flw(64, 6, 3.4) + '</svg>';
   const HEART = '<svg viewBox="0 0 32 30" width="100%" height="100%"><defs><linearGradient id="hrA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7db3"/><stop offset="1" stop-color="#d6336c"/></linearGradient></defs>'
     + '<path d="M16 29C6 21 1 15 1 9C1 4 5 1 9 1C12 1 15 3 16 6C17 3 20 1 23 1C27 1 31 4 31 9C31 15 26 21 16 29Z" fill="url(#hrA)"/><ellipse cx="9" cy="8" rx="3" ry="2" fill="#fff" opacity=".45" transform="rotate(-30 9 8)"/></svg>';
-  function decor(host, k, bar) {
+  function decor(host, k, bar, mine) {
     const a = [];
-    if (k === 'sakura') { const t = mk('div', 'sak-tree' + (bar ? ' bar' : '')); t.innerHTML = TREE; host.appendChild(t); a.push(t); }
+    if (k === 'sakura') { const t = mk('div', 'sak-tree' + (bar ? ' bar' : '') + (mine ? ' l' : '')); t.innerHTML = TREE; host.appendChild(t); a.push(t); }
     return a;
   }
   function attachFx(host, row, bar, kind) {
     const cv = mk('canvas', 'fxc'); host.appendChild(cv);
     const P = (FXP[kind] || FXP.other)[bar ? 1 : 0];
-    const e = Fire.make(cv, { mode: kind, H: P.H, R: P.R, F: 1, W: row && row.classList.contains('mine') ? -22 : 22 });
+    const e = Fire.make(cv, { mode: kind, H: P.H, R: P.R, F: 1, W: bar ? 16 : (row && row.classList.contains('mine') ? -22 : 22) });
     e.kind = kind;
     e.resize = () => {
       const w = host.offsetWidth, h = host.offsetHeight; if (!w || !h) return;
       e.size(w + P.pl + P.pr, h + P.pt + P.pb); e.cv.style.cssText = 'left:' + (-P.pl) + 'px;top:' + (-P.pt) + 'px;width:' + e.w + 'px;height:' + e.h + 'px';
-      e.box = { x: P.pl, y: P.pt, w, h }; e.o.A = kind === 'love' ? [P.pl + w - (bar ? 52 : 30), P.pt - 2] : [P.pl + w - (bar ? 79 : 28), P.pt - (bar ? 34 : 30)]; if (kind === 'love') e.o.F = bar ? 17 : 14;
+      e.box = { x: P.pl, y: P.pt, w, h }; e.o.A = kind === 'love' ? [P.pl + w - (bar ? 52 : 30), P.pt - 2] : (bar ? [P.pl + 128, P.pt - 12] : (row && row.classList.contains('mine') ? [P.pl + 12, P.pt - 8] : [P.pl + w - 12, P.pt - 8])); if (kind === 'love') e.o.F = bar ? 17 : 14;
     };
     const base = e.setOn; e.setOn = (v) => { if (v) e.resize(); if (v && !e.box) return; base(v); };
     host._fe = e; if (row) row._fire = e; if (fro) fro.observe(host);
@@ -363,7 +363,7 @@
     bubble.classList.add('fx'); bubble.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); bubble.insertBefore(f, bubble.firstChild);
     if (k === 'gift') { bubble.insertBefore(cover(), f.nextSibling); if (mine || opened.has(key)) bubble.classList.add('opened'); }
-    attachFx(bubble, row, false, k); decor(bubble, k, false); if (k === 'love') row.classList.add('fx-love'); row.classList.add(k === 'fire' ? 'fxo-row' : k === 'sakura' ? 'fxo-row3' : 'fxo-row2');
+    attachFx(bubble, row, false, k); decor(bubble, k, false, mine); if (k === 'love') row.classList.add('fx-love'); row.classList.add(k === 'fire' ? 'fxo-row' : k === 'sakura' ? 'fxo-row3' : 'fxo-row2');
     watch(row);
   }
   function tap(e, key) {
@@ -390,25 +390,27 @@
   }
   const WA = (el, kf, o) => el.animate ? el.animate(kf, Object.assign({ fill: 'forwards' }, o)) : null;
   const GRID = (w, h, C, R) => { const X = [], Y = []; for (let j2 = 0; j2 <= R; j2++) { X[j2] = []; Y[j2] = []; for (let i = 0; i <= C; i++) { X[j2][i] = i * w / C + ((i > 0 && i < C) ? rnd(-.3, .3) * w / C : 0); Y[j2][i] = j2 * h / R + ((j2 > 0 && j2 < R) ? rnd(-.3, .3) * h / R : 0); } } return { X, Y }; };
-  function vclone(b, w, h) {
-    const c = b.cloneNode(true); c.querySelectorAll('.fxc,.fxo,.sak-tree,.fx-heart').forEach((x) => x.remove());
+  function vclone(b, w, h, lite) {
+    const c = b.cloneNode(true); c.querySelectorAll('.fxc,.fxo,.sak-tree,.fx-heart' + (lite ? ',.fxb' : '')).forEach((x) => x.remove());
     c.className = b.className.replace(/\bhighlight\b|\bfx-hit\b/g, ''); c.style.cssText = 'position:absolute;left:0;top:0;margin:0;width:' + w + 'px;height:' + h + 'px;transform:none;animation:none;opacity:1;transition:none';
     return c;
   }
   const poly = (pts) => 'polygon(' + pts.map((p) => p[0].toFixed(1) + 'px ' + p[1].toFixed(1) + 'px').join(',') + ')';
-  function shard(box, b, w, h, clip, cx, cy) { const c = vclone(b, w, h); c.style.clipPath = clip; c.style.transformOrigin = cx + 'px ' + cy + 'px'; box.appendChild(c); return c; }
+  function shard(box, b, w, h, clip, cx, cy) { const c = vclone(b, w, h, true); c.style.willChange = 'transform,opacity'; c.style.clipPath = clip; c.style.transformOrigin = cx + 'px ' + cy + 'px'; box.appendChild(c); return c; }
   const VF = {
     ice(box, b, w, h) { // real shatter: irregular triangular shards fly out from the centre
-      const C = 7, R = 3, G = GRID(w, h, C, R);
+      const C = 5, R = 2, G = GRID(w, h, C, R);
       for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
         const p = (i, jj) => [G.X[jj][i], G.Y[jj][i]], a0 = p(c, r), a1 = p(c + 1, r), a2 = p(c, r + 1), a3 = p(c + 1, r + 1);
         ((c + r) % 2 ? [[a0, a1, a3], [a0, a3, a2]] : [[a0, a1, a2], [a1, a3, a2]]).forEach((t) => {
           const cx = (t[0][0] + t[1][0] + t[2][0]) / 3, cy = (t[0][1] + t[1][1] + t[2][1]) / 3, s = shard(box, b, w, h, poly(t), cx, cy);
           const dx = (cx - w / 2) * rnd(.6, 1.3) + rnd(-8, 8), dy = (cy - h / 2) * .7 + rnd(30, 80);
-          WA(s, [{ transform: 'none', opacity: 1, filter: 'brightness(1.5) saturate(.6)' }, { transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + rnd(-170, 170) + 'deg)', opacity: 0, filter: 'brightness(1.8) saturate(.4)' }], { duration: 720, delay: Math.hypot(cx - w / 2, cy - h / 2) * 1.1, easing: 'cubic-bezier(.3,0,.8,.6)' });
+          WA(s, [{ transform: 'none', opacity: 1 }, { transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + rnd(-170, 170) + 'deg)', opacity: 0 }], { duration: 700, delay: Math.hypot(cx - w / 2, cy - h / 2) * 1.1, easing: 'cubic-bezier(.3,0,.8,.6)' });
         });
       }
-      return 900;
+      const fl = mk('div'); fl.style.cssText = 'position:absolute;inset:-6px;border-radius:20px;background:radial-gradient(circle,rgba(235,250,255,.9),rgba(150,210,255,.3) 65%,transparent);opacity:0'; box.appendChild(fl);
+      WA(fl, [{ opacity: 0 }, { opacity: .9, offset: .15 }, { opacity: 0 }], { duration: 300 });
+      return 850;
     },
     fire(box, b, w, h) { // burns away from the bottom up, glowing edge, flames flare
       box.style.overflow = 'hidden'; box.style.borderRadius = '17px';
@@ -464,7 +466,7 @@
       return 800;
     },
     gold(box, b, w, h) { // turns to gold, then evaporates as dust in a wave
-      const C = 12, R = 4; WA(box, [{ filter: 'none' }, { filter: 'sepia(.9) saturate(3.2) brightness(1.35)', offset: .35 }, { filter: 'sepia(.9) saturate(3.2) brightness(1.35)' }], { duration: 840 });
+      const C = 10, R = 3; WA(box, [{ filter: 'none' }, { filter: 'sepia(.9) saturate(3.2) brightness(1.35)', offset: .35 }, { filter: 'sepia(.9) saturate(3.2) brightness(1.35)' }], { duration: 840 });
       for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
         const cl = 'inset(' + r * h / R + 'px ' + (w - (c + 1) * w / C) + 'px ' + (h - (r + 1) * h / R) + 'px ' + c * w / C + 'px)', s = shard(box, b, w, h, cl, (c + .5) * w / C, (r + .5) * h / R);
         WA(s, [{ transform: 'none', opacity: 1 }, { transform: 'translate(' + rnd(8, 40) + 'px,' + (-rnd(24, 80)) + 'px) scale(.3) rotate(' + rnd(-90, 90) + 'deg)', opacity: 0 }], { duration: 520, delay: 260 + c / C * 300 + rnd(0, 40), easing: 'ease-in' });
@@ -535,7 +537,7 @@
       d.appendChild(mk('span', 'fc-dot')); d.appendChild(mk('b', null, label));
       const x = mk('button'); x.type = 'button'; x.innerHTML = X; x.setAttribute('aria-label', 'إزالة'); x.onclick = off; d.appendChild(x); chipsEl.appendChild(d);
     };
-    if (cur) add('t', 'قالب ' + T[cur].n + ' ' + T[cur].e, () => pick(''));
+    if (cur) add('t', 'قالب ' + T[cur].n, () => pick(''));
     if (splAll) add('s', 'رسالة مخفية', () => setSpl(false));
     chipsEl.classList.toggle('has', !!chipsEl.firstChild);
   }
@@ -569,7 +571,7 @@
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); b.appendChild(f);
     if (k === 'gift') b.appendChild(cover());
     { const de = attachFx(b, null, false, k); decor(b, k, false); de.vis = false; demoFires.push(de); if (tileIO) tileIO.observe(b); }
-    b.appendChild(mk('div', 'msg-text', 'مرحبًا بك'));
+    b.appendChild(mk('div', 'msg-text', 'مرحباً بك'));
     return b;
   }
   function build() {
@@ -584,7 +586,7 @@
     const grid = $('fxGrid');
     Object.keys(T).forEach((k) => {
       const tl = mk('div', 'fx-tile'); tl.dataset.fx = k;
-      const st = mk('div', 'fx-stage'); st.appendChild(demo(k)); tl.appendChild(st); tl.appendChild(mk('b', null, T[k].n + ' ' + T[k].e));
+      const st = mk('div', 'fx-stage'); st.appendChild(demo(k)); tl.appendChild(st); tl.appendChild(mk('b', null, T[k].n));
       tl.addEventListener('click', () => pick(k)); grid.appendChild(tl); tiles[k] = tl;
     });
     const sw = $('fxSwitch');

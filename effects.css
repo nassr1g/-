@@ -293,3 +293,19 @@
 .msg-row.fx-love.fx-live { transform-origin: 0 50%; animation: loveBeat 1.2s ease-out infinite; }
 .msg-row.fx-love.mine.fx-live { transform-origin: 100% 50%; }
 @keyframes loveBeat { 0% { transform: scale(1.03); } 14% { transform: scale(1); } 26% { transform: scale(1.022); } 40%, 100% { transform: scale(1); } }
+
+/* ===== v9: slanted blossom branch (inside message height), calmer love ===== */
+.msg-row.fxo-row3 { margin-top: 24px; }
+.fx-tile[data-fx="sakura"] .fx-stage { padding-top: 38px; }
+.sak-tree { right: 6px; left: auto; bottom: calc(100% - 9px); width: 84px; height: 32px; transform-origin: 100% 100%; animation: sakSway 5s ease-in-out infinite alternate; }
+.sak-tree.l { right: auto; left: 6px; transform-origin: 0 100%; }
+.sak-tree.l svg { transform: scaleX(-1); }
+.sak-tree.bar { right: auto; left: 34px; bottom: calc(100% - 6px); width: 110px; height: 38px; transform-origin: 0 100%; }
+@keyframes sakSway { from { transform: rotate(-1.2deg); } to { transform: rotate(1.2deg); } }
+.msg-row.fx-love.fx-live { animation: none; }
+
+.sak-tree { animation-name: sakSwayR; }
+.sak-tree.l { animation-name: sakSwayL; }
+@keyframes sakSwayR { from { transform: rotate(-11deg); } to { transform: rotate(-8deg); } }
+@keyframes sakSwayL { from { transform: rotate(11deg); } to { transform: rotate(8deg); } }
+.sak-tree.bar { animation-name: sakSwayL; }
