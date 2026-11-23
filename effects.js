@@ -248,10 +248,10 @@
     other: [{ pl: 30, pt: 44, pr: 30, pb: 30, H: 26, R: 17 }, { pl: 26, pt: 66, pr: 26, pb: 22, H: 42, R: 28 }],
     sakura: [{ pl: 30, pt: 20, pr: 30, pb: 64, H: 26, R: 17 }, { pl: 20, pt: 24, pr: 20, pb: 34, H: 42, R: 28 }]
   };
-  const flw = (x, y, r) => { let s = '<g transform="translate(' + x + ' ' + y + ')">'; for (let i = 0; i < 5; i++) s += '<ellipse cx="0" cy="' + (-r * .62) + '" rx="' + (r * .5) + '" ry="' + (r * .68) + '" transform="rotate(' + i * 72 + ')" fill="#ffc9dc" stroke="#f08fb2" stroke-width=".25"/>'; return s + '<circle r="' + (r * .24) + '" fill="#e0507f"/></g>'; };
-  const TREE = '<svg viewBox="0 0 80 40" width="100%" height="100%" overflow="visible"><g fill="none" stroke="#5a3526" stroke-linecap="round"><path d="M-6 2C2 4 8 5 14 5" stroke-width="4.2"/><path d="M-6 2C8 6 20 4 34 11C44 16 54 17 68 25" stroke-width="2.6"/><path d="M16 5C22 -1 32 -3 42 0" stroke-width="1.5"/><path d="M30 10C32 17 30 23 26 29" stroke-width="1.4"/><path d="M50 16C56 11 64 9 76 11" stroke-width="1.4"/><path d="M60 20C66 22 70 28 72 34" stroke-width="1.2"/></g>'
-    + '<g fill="#f6a5c0"><ellipse cx="43" cy="-1" rx="1.5" ry="2.3"/><ellipse cx="25" cy="31" rx="1.4" ry="2.1"/><ellipse cx="77" cy="11" rx="1.4" ry="2"/><ellipse cx="72" cy="36" rx="1.3" ry="1.9"/></g>'
-    + flw(8, 4, 3.8) + flw(20, 6, 3.4) + flw(34, 11, 4.2) + flw(46, 16, 3.6) + flw(58, 20, 4) + flw(68, 25, 3.4) + flw(28, -2, 3.2) + flw(40, 0, 3.6) + flw(31, 17, 3.2) + flw(27, 27, 3.4) + flw(62, 10, 3.4) + flw(74, 11, 3.1) + flw(70, 31, 3) + '</svg>';
+  const flw = (x, y, r) => { let s = '<g transform="translate(' + x + ' ' + y + ')">'; for (let i = 0; i < 5; i++) s += '<ellipse cx="0" cy="' + (-r * .62) + '" rx="' + (r * .5) + '" ry="' + (r * .68) + '" transform="rotate(' + i * 72 + ')" fill="#ffb8d1" stroke="#e5668f" stroke-width=".3"/>'; return s + '<circle r="' + (r * .24) + '" fill="#c2335f"/></g>'; };
+  const FL = [[24, 7, 3.6], [36, 4, 3.2], [50, 4, 3.8], [62, 6, 3.3], [74, 10, 3.6], [88, 11, 3.2], [100, 8, 3.4], [110, 5, 3], [34, 17, 3.8], [46, 22, 3.4], [60, 27, 4], [74, 34, 3.6], [86, 40, 3.5], [98, 45, 3.8], [110, 55, 3.2], [23, 22, 3.4], [21, 34, 3.6], [15, 46, 3.3], [11, 60, 3], [63, -1, 3.2], [57, 40, 3.1], [54, 49, 3.3], [98, 34, 3.1], [108, 35, 2.9], [82, 20, 3.1], [40, 13, 2.8], [68, 20, 2.7]];
+  const TREE = '<svg viewBox="0 0 120 70" width="130" height="76" overflow="visible"><g fill="none" stroke="var(--bk,#4a2c20)" stroke-linecap="round"><path d="M-10 -4C4 0 16 4 28 13" stroke-width="6.5"/><path d="M26 12C42 20 58 24 74 34C88 42 100 47 114 58" stroke-width="3.4"/><path d="M18 8C34 2 52 3 68 8C82 12 96 10 112 5" stroke-width="2.4"/><path d="M26 14C21 25 24 37 17 50C14 56 12 60 10 66" stroke-width="2.6"/><path d="M50 4C54 -1 60 -3 66 -1" stroke-width="1.4"/><path d="M58 26C61 34 59 42 54 51" stroke-width="1.6"/><path d="M84 41C90 35 99 33 109 35" stroke-width="1.5"/><path d="M70 9C72 16 78 20 84 20" stroke-width="1.3"/></g>'
+    + FL.map((f) => flw(f[0], f[1], f[2])).join('') + '</svg>';
   const HEART = '<svg viewBox="0 0 32 30" width="100%" height="100%"><defs><linearGradient id="hrA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7db3"/><stop offset="1" stop-color="#d6336c"/></linearGradient></defs>'
     + '<path d="M16 29C6 21 1 15 1 9C1 4 5 1 9 1C12 1 15 3 16 6C17 3 20 1 23 1C27 1 31 4 31 9C31 15 26 21 16 29Z" fill="url(#hrA)"/><ellipse cx="9" cy="8" rx="3" ry="2" fill="#fff" opacity=".45" transform="rotate(-30 9 8)"/></svg>';
   function decor(host, k, bar, mine) {
@@ -357,7 +357,7 @@
 
   // ---------- message fonts (English = Unicode styles, Arabic = web fonts) + glowing text ----------
   const FN = { bold: 'Bold', bi: 'Bold Italic', mono: 'Monospace', resalaty: 'رسالتي', lemon: 'ليمون', moshref: 'المشرف' };
-  const FONTS = { resalaty: { q: 'Playpen+Sans+Arabic:wght@400;600' }, lemon: { q: 'Vibes' }, moshref: { q: 'Amiri:wght@400;700' } };
+  const FONTS = { resalaty: { q: 'Playpen+Sans+Arabic:wght@400;600' }, lemon: { q: 'Katibeh' }, moshref: { q: 'Amiri:wght@400;700' } };
   const MB = { bold: [0x1D400, 0x1D41A, 0x1D7CE], bi: [0x1D468, 0x1D482, 0x1D7CE], mono: [0x1D670, 0x1D68A, 0x1D7F6] };
   const loadedF = {};
   function loadFont(k) { if (!FONTS[k] || loadedF[k]) return; loadedF[k] = 1; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + FONTS[k].q + '&display=swap'; document.head.appendChild(l); }

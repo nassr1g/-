@@ -332,3 +332,16 @@
 
 .sak-tree, .sak-tree.l { top: -13px; width: 66px; height: 33px; }
 .sak-tree.bar { top: -14px; width: 100px; height: 50px; }
+
+/* ===== v11: sakura branch lives INSIDE the message (clipped to its frame, like a background) ===== */
+.sak-tree, .sak-tree.l, .sak-tree.bar { position: absolute; inset: 0; left: 0; right: 0; top: 0; bottom: 0; width: auto; height: auto; z-index: 0; overflow: hidden; border-radius: inherit; pointer-events: none; animation: none; transform: none;
+  opacity: .92; -webkit-mask-image: linear-gradient(135deg, #000 30%, rgba(0,0,0,.35) 75%, transparent 100%); mask-image: linear-gradient(135deg, #000 30%, rgba(0,0,0,.35) 75%, transparent 100%); }
+.sak-tree.l { -webkit-mask-image: linear-gradient(225deg, #000 30%, rgba(0,0,0,.35) 75%, transparent 100%); mask-image: linear-gradient(225deg, #000 30%, rgba(0,0,0,.35) 75%, transparent 100%); }
+.sak-tree svg { position: absolute; left: 0; top: 0; }
+.sak-tree.l svg { left: auto; right: 0; transform: scaleX(-1); }
+.sak-tree.bar { z-index: -1; --bk: #a87560; border-radius: 28px; }
+.sak-tree.bar svg { width: 190px; height: 104px; }
+.msg-row.fxo-row3 { margin-top: 10px; margin-bottom: 22px; }
+.fx-tile[data-fx="sakura"] .fx-stage { padding-top: 26px; }
+/* lemon: thick brush look */
+.ff-s-lemon, .msg-bubble.ff-lemon .msg-text { font-family: 'Katibeh', 'Noto Sans Arabic', sans-serif; font-size: 1.35em; line-height: 1.3; -webkit-text-stroke: .7px currentColor; }
