@@ -1062,15 +1062,16 @@
 
   // ---------- device -> Firebase: the outbox ----------
   function pendingData(r) {
-    return { text: r.text, senderUid: r.senderUid, senderName: r.senderName, timestamp: r.created, replyTo: r.replyTo, sticker: r.sticker, fx: r.fx, pending: true, state: r.state };
+    return { text: r.text, senderUid: r.senderUid, senderName: r.senderName, timestamp: r.created, replyTo: r.replyTo, sticker: r.sticker, fx: r.fx, ff: r.ff, gl: r.gl, pending: true, state: r.state };
   }
   function renderPending(r) { renderMessage(r.k, pendingData(r), true); }
 
-  async function queueMessage(text, sticker, fx) {
+  async function queueMessage(text, sticker, fx, ext) {
     const k = db.ref('chat/messages').push().key; // generated on the device: unique, time-ordered, works offline
     const rec = { k, text, senderUid: myUid, senderName: myName, created: Date.now(), state: 'pending', tries: 0 };
     if (sticker) rec.sticker = sticker;
     if (fx) rec.fx = fx;
+    if (ext) { if (ext.ff) rec.ff = ext.ff; if (ext.gl) rec.gl = true; }
     if (activeReply) rec.replyTo = { key: activeReply.key, sender: activeReply.sender, text: activeReply.text.slice(0, 120) };
     cancelReply();
     outbox.set(k, rec); pendingKeys.add(k);
@@ -1113,6 +1114,8 @@
       if (rec.replyTo) payload.replyTo = rec.replyTo;
       if (rec.sticker) payload.sticker = rec.sticker;
       if (rec.fx) payload.fx = rec.fx;
+      if (rec.ff) payload.ff = rec.ff;
+      if (rec.gl) payload.gl = true;
       try { // message + a 'new message' record in the changes feed, in one atomic write
         await tmo(db.ref().update({ ['chat/messages/' + rec.k]: payload, ['chat/changes/n-' + rec.k]: { k: rec.k, t: 'n', ts: SV(), by: rec.senderUid } }), 15000);
       } catch (e0) { if (e0 && e0.code === 'PERMISSION_DENIED') await tmo(ref.set(payload), 15000); else throw e0; } // rules without the feed deployed yet
@@ -2155,9 +2158,9 @@
         .catch((err) => { console.error('edit error', err); restore(); showSystemError('تعذر تعديل الرسالة'); });
       return;
     }
-    let fx = '';
-    if (window.FRFx) { const o = FRFx.outgoing(text); text = o.text; fx = o.fx; if (fx) FRFx.screen(fx); }
-    queueMessage(text, null, fx); // shows at once as "sending", delivered in order, never twice
+    let fx = '', ext = null;
+    if (window.FRFx) { const o = FRFx.outgoing(text); text = o.text; fx = o.fx; ext = (o.ff || o.gl) ? { ff: o.ff, gl: o.gl } : null; if (fx) FRFx.screen(fx); }
+    queueMessage(text, null, fx, ext); // shows at once as "sending", delivered in order, never twice
   }
   // Tapping the send button must not steal focus from the text box (keeps the keyboard open)
   // The send button never opens or closes the keyboard: it keeps focus where it was.

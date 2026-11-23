@@ -99,6 +99,12 @@
           },
           "fx": {
             ".validate": "newData.isString() && newData.val().matches(/^(fire|gift|ice|love|galaxy|sakura|thunder|gold)$/)"
+          },
+          "ff": {
+            ".validate": "newData.isString() && newData.val().matches(/^(resalaty|lemon|moshref)$/)"
+          },
+          "gl": {
+            ".validate": "newData.isBoolean() && newData.val() === true"
           }
         }
       },

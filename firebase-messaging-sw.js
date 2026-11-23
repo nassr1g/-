@@ -131,6 +131,8 @@ async function flushOutboxBG() {
     if (rec.replyTo) body.replyTo = rec.replyTo;
     if (rec.sticker) body.sticker = rec.sticker;
     if (rec.fx) body.fx = rec.fx;
+    if (rec.ff) body.ff = rec.ff;
+    if (rec.gl) body.gl = true;
     const rootUrl = auth.dbUrl + '/.json?auth=' + encodeURIComponent(tok);        // message + 'new message' record of the changes feed, atomically
     let put = await fetch(rootUrl, { method: 'PATCH', body: JSON.stringify({ ['chat/messages/' + rec.k]: body, ['chat/changes/n-' + rec.k]: { k: rec.k, t: 'n', ts: { '.sv': 'timestamp' }, by: rec.senderUid } }) });
     if (!put.ok && put.status < 500) put = await fetch(url, { method: 'PUT', body: JSON.stringify(body) });   // rules without the feed deployed yet

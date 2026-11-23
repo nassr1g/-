@@ -161,9 +161,9 @@
         + 'if(tt<.8&&h21(vec2(cy,3.))>.3){vec2 dir=normalize(vec2(1.,.55));vec2 st=vec2(c.x+(h21(vec2(cy,5.))-.5)*h.x*1.6-uH*.6,c.y-h.y-uH*.9);vec2 head=st+dir*tt*uH*3.2;vec2 tail=head-dir*uH*.9;vec2 pa=px-tail,ba=head-tail;float k=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);float ds=length(pa-ba*k);\n'
         + 'float env=smoothstep(0.,.1,tt)*smoothstep(.8,.5,tt);o=ov(o,pm(vec3(.85,.92,1.),smoothstep(2.2,0.,ds)*k*k*env));}\n'
         + 'return o;}',
-      sakura: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float dy=px.y-uA.y;float cx=uA.x+max(dy,0.)*(uW/34.);float hw=14.+max(dy,0.)*.3;float m=smoothstep(hw,hw*.4,abs(px.x-cx))*smoothstep(0.,10.,dy);\n'
-        + 'float vis=m*smoothstep(-1.,2.,d);float dd=max(d,0.);vec4 o=pm(vec3(1.,.6,.78),exp(-dd/(uH*.35))*.1*smoothstep(-3.,1.,d));\n'
-        + 'o=ov(o,parts(px,vis,vec2(uW,34.),24.,2,.8,vec3(1.,.72,.84),vec3(1.,.9,.95)));o=ov(o,parts(px+33.,vis*.85,vec2(uW*.7,22.),18.,2,.7,vec3(1.,.62,.78),vec3(1.,.85,.92)));return o;}',
+      sakura: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float dy=px.y-uA.y;float cx=uA.x+max(dy,0.)*(uW/34.);float hw=20.+max(dy,0.)*.3;float m=smoothstep(hw,hw*.4,abs(px.x-cx))*smoothstep(0.,10.,dy);\n'
+        + 'float vis=m;vec4 o=vec4(0.);\n'
+        + 'o=ov(o,parts(px,vis,vec2(uW,34.),24.,2,.6,vec3(1.,.72,.84),vec3(1.,.9,.95)));o=ov(o,parts(px+33.,vis*.85,vec2(uW*.7,22.),18.,2,.5,vec3(1.,.62,.78),vec3(1.,.85,.92)));return o;}',
       thunder: 'vec4 fx(vec2 px,float d,vec2 p,vec2 h,float up){float s=es(p,h);float dd=max(d,0.);vec2 c=px-p;float pulse=.5+.5*sin(uT*3.1);\n'
         + 'vec4 o=pm(vec3(.35,.5,1.),exp(-dd/(uH*.4))*(.16+.12*pulse)*smoothstep(-3.,1.,d));\n'
         + 'for(int k=0;k<3;k++){float sd=float(k)+1.;float seg=smoothstep(.42,.7,fbm(vec2(s*.012+sd*7.,uT*.9+sd)));\n'
@@ -246,12 +246,12 @@
   const FXP = {
     fire: [{ pl: 20, pt: 48, pr: 20, pb: 12, H: 30, R: 17 }, { pl: 20, pt: 70, pr: 20, pb: 14, H: 42, R: 28 }],
     other: [{ pl: 30, pt: 44, pr: 30, pb: 30, H: 26, R: 17 }, { pl: 26, pt: 66, pr: 26, pb: 22, H: 42, R: 28 }],
-    sakura: [{ pl: 46, pt: 50, pr: 46, pb: 44, H: 26, R: 17 }, { pl: 30, pt: 62, pr: 30, pb: 34, H: 42, R: 28 }]
+    sakura: [{ pl: 30, pt: 20, pr: 30, pb: 64, H: 26, R: 17 }, { pl: 20, pt: 24, pr: 20, pb: 34, H: 42, R: 28 }]
   };
   const flw = (x, y, r) => { let s = '<g transform="translate(' + x + ' ' + y + ')">'; for (let i = 0; i < 5; i++) s += '<ellipse cx="0" cy="' + (-r * .62) + '" rx="' + (r * .5) + '" ry="' + (r * .68) + '" transform="rotate(' + i * 72 + ')" fill="#ffc9dc" stroke="#f08fb2" stroke-width=".25"/>'; return s + '<circle r="' + (r * .24) + '" fill="#e0507f"/></g>'; };
-  const TREE = '<svg viewBox="0 0 100 36" width="100%" height="100%" overflow="visible"><g fill="none" stroke="#6b4030" stroke-linecap="round"><path d="M101 35C84 31 70 25 58 21C44 16 30 15 14 7" stroke-width="2.4"/><path d="M80 29C84 21 90 15 96 11" stroke-width="1.4"/><path d="M60 21C62 14 60 9 64 4" stroke-width="1.3"/><path d="M40 16C38 11 34 9 30 10" stroke-width="1.2"/><path d="M70 24C74 22 80 22 84 24" stroke-width="1.1"/></g>'
-    + '<g fill="#f6a5c0"><ellipse cx="13" cy="5" rx="1.6" ry="2.4"/><ellipse cx="65" cy="2.5" rx="1.5" ry="2.2"/><ellipse cx="99" cy="9" rx="1.4" ry="2"/></g>'
-    + flw(16, 7, 4.2) + flw(29, 10, 3.5) + flw(42, 14, 4.4) + flw(58, 18, 4) + flw(71, 22, 3.4) + flw(88, 14, 4.2) + flw(96, 10, 3.2) + flw(64, 6, 3.4) + '</svg>';
+  const TREE = '<svg viewBox="0 0 80 40" width="100%" height="100%" overflow="visible"><g fill="none" stroke="#5a3526" stroke-linecap="round"><path d="M-6 2C2 4 8 5 14 5" stroke-width="4.2"/><path d="M-6 2C8 6 20 4 34 11C44 16 54 17 68 25" stroke-width="2.6"/><path d="M16 5C22 -1 32 -3 42 0" stroke-width="1.5"/><path d="M30 10C32 17 30 23 26 29" stroke-width="1.4"/><path d="M50 16C56 11 64 9 76 11" stroke-width="1.4"/><path d="M60 20C66 22 70 28 72 34" stroke-width="1.2"/></g>'
+    + '<g fill="#f6a5c0"><ellipse cx="43" cy="-1" rx="1.5" ry="2.3"/><ellipse cx="25" cy="31" rx="1.4" ry="2.1"/><ellipse cx="77" cy="11" rx="1.4" ry="2"/><ellipse cx="72" cy="36" rx="1.3" ry="1.9"/></g>'
+    + flw(8, 4, 3.8) + flw(20, 6, 3.4) + flw(34, 11, 4.2) + flw(46, 16, 3.6) + flw(58, 20, 4) + flw(68, 25, 3.4) + flw(28, -2, 3.2) + flw(40, 0, 3.6) + flw(31, 17, 3.2) + flw(27, 27, 3.4) + flw(62, 10, 3.4) + flw(74, 11, 3.1) + flw(70, 31, 3) + '</svg>';
   const HEART = '<svg viewBox="0 0 32 30" width="100%" height="100%"><defs><linearGradient id="hrA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7db3"/><stop offset="1" stop-color="#d6336c"/></linearGradient></defs>'
     + '<path d="M16 29C6 21 1 15 1 9C1 4 5 1 9 1C12 1 15 3 16 6C17 3 20 1 23 1C27 1 31 4 31 9C31 15 26 21 16 29Z" fill="url(#hrA)"/><ellipse cx="9" cy="8" rx="3" ry="2" fill="#fff" opacity=".45" transform="rotate(-30 9 8)"/></svg>';
   function decor(host, k, bar, mine) {
@@ -260,14 +260,14 @@
     return a;
   }
   function attachFx(host, row, bar, kind) {
-    const cv = mk('canvas', 'fxc'); host.appendChild(cv);
+    const cv = mk('canvas', 'fxc' + (kind === 'sakura' ? ' front' : '')); host.appendChild(cv);
     const P = (FXP[kind] || FXP.other)[bar ? 1 : 0];
-    const e = Fire.make(cv, { mode: kind, H: P.H, R: P.R, F: 1, W: bar ? 16 : (row && row.classList.contains('mine') ? -22 : 22) });
+    const e = Fire.make(cv, { mode: kind, H: P.H, R: P.R, F: 1, W: bar ? 10 : (row && row.classList.contains('mine') ? -10 : 10) });
     e.kind = kind;
     e.resize = () => {
       const w = host.offsetWidth, h = host.offsetHeight; if (!w || !h) return;
       e.size(w + P.pl + P.pr, h + P.pt + P.pb); e.cv.style.cssText = 'left:' + (-P.pl) + 'px;top:' + (-P.pt) + 'px;width:' + e.w + 'px;height:' + e.h + 'px';
-      e.box = { x: P.pl, y: P.pt, w, h }; e.o.A = kind === 'love' ? [P.pl + w - (bar ? 52 : 30), P.pt - 2] : (bar ? [P.pl + 128, P.pt - 12] : (row && row.classList.contains('mine') ? [P.pl + 12, P.pt - 8] : [P.pl + w - 12, P.pt - 8])); if (kind === 'love') e.o.F = bar ? 17 : 14;
+      e.box = { x: P.pl, y: P.pt, w, h }; e.o.A = kind === 'love' ? [P.pl + w - (bar ? 52 : 30), P.pt - 2] : (bar ? [P.pl + 36, P.pt + 4] : (row && row.classList.contains('mine') ? [P.pl + w - 24, P.pt + 2] : [P.pl + 24, P.pt + 2])); if (kind === 'love') e.o.F = bar ? 17 : 14;
     };
     const base = e.setOn; e.setOn = (v) => { if (v) e.resize(); if (v && !e.box) return; base(v); };
     host._fe = e; if (row) row._fire = e; if (fro) fro.observe(host);
@@ -355,10 +355,24 @@
     scT = setTimeout(() => { el.classList.add('out'); setTimeout(() => { if (el._fire) el._fire.setOn(false); el.remove(); if (scEl === el) scEl = null; }, 500); }, d.ms);
   }
 
+  // ---------- message fonts (English = Unicode styles, Arabic = web fonts) + glowing text ----------
+  const FN = { bold: 'Bold', bi: 'Bold Italic', mono: 'Monospace', resalaty: 'رسالتي', lemon: 'ليمون', moshref: 'المشرف' };
+  const FONTS = { resalaty: { q: 'Playpen+Sans+Arabic:wght@400;600' }, lemon: { q: 'Vibes' }, moshref: { q: 'Amiri:wght@400;700' } };
+  const MB = { bold: [0x1D400, 0x1D41A, 0x1D7CE], bi: [0x1D468, 0x1D482, 0x1D7CE], mono: [0x1D670, 0x1D68A, 0x1D7F6] };
+  const loadedF = {};
+  function loadFont(k) { if (!FONTS[k] || loadedF[k]) return; loadedF[k] = 1; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + FONTS[k].q + '&display=swap'; document.head.appendChild(l); }
+  function mathify(t, m) {
+    const b = MB[m]; if (!b) return t;
+    return t.split(/(@[A-Za-z0-9_]+|https?:\/\/\S+|www\.\S+|`[^`]*`)/).map((s, i) => i % 2 ? s : s.replace(/[A-Za-z0-9]/g, (c) => { const n = c.charCodeAt(0); return String.fromCodePoint(n >= 97 ? b[1] + n - 97 : n >= 65 ? b[0] + n - 65 : b[2] + n - 48); })).join('');
+  }
+  const clamp1k = (t) => { let o = '', n = 0; for (const ch of t) { n += ch.length; if (n > 1000) break; o += ch; } return o; };
+
   // ---------- hooks used by app.js ----------
   function after(row, bubble, key, data, mine) {
     index(bubble, key);
     if (bubble.querySelector('.spl')) watch(row);
+    if (data.ff && FONTS[data.ff]) { bubble.classList.add('ff', 'ff-' + data.ff); loadFont(data.ff); }
+    if (data.gl) { bubble.classList.add('tg'); watch(row); }
     const k = data.fx; if (!k || !T[k] || data.sticker) return;
     bubble.classList.add('fx'); bubble.dataset.fx = k;
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); bubble.insertBefore(f, bubble.firstChild);
@@ -384,7 +398,7 @@
   }
   function edited(textEl, key) { opened.forEach((v) => { if (v.indexOf(key + ':') === 0) opened.delete(v); }); index(textEl, key); watch(textEl.closest('.msg-row')); }
   function clear(b) {
-    [].slice.call(b.classList).forEach((c) => { if (c.indexOf('vn') === 0) b.classList.remove(c); });
+    [].slice.call(b.classList).forEach((c) => { if (c.indexOf('vn') === 0 || c.indexOf('ff-') === 0) b.classList.remove(c); }); b.classList.remove('ff', 'tg');
     b.classList.remove('fx', 'opened', 'opening', 'fx-hit', 'revealing', 'flash'); delete b.dataset.fx;
     const r = b.closest('.msg-row'); if (r) r.classList.remove('fxwatch', 'fx-live', 'fxo-row', 'fxo-row2', 'fxo-row3', 'fx-love');
   }
@@ -504,7 +518,7 @@
   // ---------- composer: state + panel ----------
   const glass = document.querySelector('.composer-glass'), input = $('messageInput'), btn = $('fxToggleBtn'), panel = $('fxPanel'), chipsEl = $('fxChips');
   const ph0 = input ? input.placeholder : '';
-  let outer = null, outerK = '', panelVis = false, cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
+  let fontMode = '', glowOn = false, outer = null, outerK = '', panelVis = false, cur = '', splAll = false, panelOpen = false, built = false, layer = null, giftTimer = null, tiles = {};
 
   function applyComposer() {
     if (outer && outerK !== cur) { const o = outer; outer = null; o.cv.style.transition = 'opacity .35s'; o.cv.style.opacity = 0; (o.extras || []).forEach((x) => { x.style.transition = 'opacity .35s'; x.style.opacity = 0; }); setTimeout(() => { o.setOn(false); o.cv.remove(); (o.extras || []).forEach((x) => x.remove()); if (glass._fe === o) glass._fe = null; }, 400); }
@@ -526,7 +540,7 @@
     input.placeholder = splAll ? 'رسالة مخفية…' : ph0;
     btn.classList.toggle('has', !!(cur || splAll));
     Object.keys(tiles).forEach((k) => tiles[k].classList.toggle('on', k === cur));
-    if (built) { $('fxSplAll').classList.toggle('on', splAll); }
+    if (built) { $('fxSplAll').classList.toggle('on', splAll); $('fxGlow').classList.toggle('on', glowOn); Object.keys(fontBtns).forEach((m) => fontBtns[m].classList.toggle('on', m === fontMode)); }
     drawChips();
     if (C().expand) C().expand();
   }
@@ -539,6 +553,8 @@
     };
     if (cur) add('t', 'قالب ' + T[cur].n, () => pick(''));
     if (splAll) add('s', 'رسالة مخفية', () => setSpl(false));
+    if (fontMode) add('f', 'خط ' + FN[fontMode], () => { fontMode = ''; applyComposer(); });
+    if (glowOn) add('g', 'نص متوهج', () => { glowOn = false; applyComposer(); });
     chipsEl.classList.toggle('has', !!chipsEl.firstChild);
   }
   function focusInput() { setTimeout(() => { try { input.focus({ preventScroll: true }); } catch (e) {} }, 80); }
@@ -549,6 +565,13 @@
     if (k) { closePanel(); focusInput(); }
   }
   function setSpl(v) { splAll = v; applyComposer(); if (v) { closePanel(); focusInput(); } }
+  const fontBtns = {};
+  function setFont(m) { fontMode = fontMode === m ? '' : m; if (FONTS[fontMode]) loadFont(fontMode); applyComposer(); if (fontMode) { closePanel(); focusInput(); } }
+  function convertSel(m) {
+    const v = input.value, a = input.selectionStart, b = input.selectionEnd; if (a == null || a === b) return false;
+    const seg = mathify(v.slice(a, b), m); input.value = v.slice(0, a) + seg + v.slice(b); const p = a + seg.length;
+    closePanel(); input.dispatchEvent(new Event('input')); setTimeout(() => { try { input.focus({ preventScroll: true }); input.setSelectionRange(p, p); } catch (e) {} }, 90); return true;
+  }
   function wrapSel() {
     const v = input.value; let a = input.selectionStart, b = input.selectionEnd;
     const warn = () => C().toast && C().toast('حدّد جزءًا من النص أولًا ثم اضغط', null, null, true, 2400);
@@ -562,8 +585,9 @@
   function outgoing(text) {
     let t = text;
     if (splAll && !new RegExp('^' + SPL + '$').test(t)) t = '||' + (t.length > 996 ? t.slice(0, 996) : t) + '||';
-    const fx = cur; cur = ''; splAll = false; applyComposer();
-    return { text: t, fx };
+    if (MB[fontMode]) t = clamp1k(mathify(t, fontMode));
+    const fx = cur, ff = FONTS[fontMode] ? fontMode : '', gl = glowOn; cur = ''; splAll = false; fontMode = ''; glowOn = false; applyComposer();
+    return { text: t, fx, ff, gl };
   }
 
   function demo(k) {
@@ -582,7 +606,9 @@
       + '<div class="fx-card"><b>إخفاء النص (Spoiler)</b><p>جرّب بنفسك: <span class="spl" id="fxDemoSpl">اضغط لتكشف السر</span></p></div>'
       + '<button class="notif-toggle" id="fxSplAll"><span class="opt-txt"><b>إخفاء الرسالة كاملة</b><small>تُرسَل مخفية ولا تنكشف إلا بالضغط عليها</small></span><span class="switch"></span></button>'
       + '<button class="notif-toggle" id="fxSplSel" style="margin-top:8px"><span class="opt-txt"><b>إخفاء الجزء المحدد</b><small>حدّد كلمات داخل رسالتك ثم اضغط هنا</small></span><span class="srch-ic"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 9h16M4 15h10" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" fill="none"/><circle cx="19" cy="15" r="1.3" fill="currentColor"/></svg></span></button>'
-      + '<div class="fx-tip">اختصار سريع: اكتب النص بين خطين عموديين مثل <code>||سر||</code> وسيُخفى فور إرساله.</div></div></div>';
+      + '<div class="fx-tip">اختصار سريع: اكتب النص بين خطين عموديين مثل <code>||سر||</code> وسيُخفى فور إرساله.</div>'
+      + '<h4 class="set-sub" style="margin:16px 2px 8px">الخطوط</h4><div class="fx-fonts" id="fxFonts"></div><div class="fx-tip">الخطوط الإنجليزية: حدّد جزءًا من النص لتحويله فورًا، أو اختر الخط لتحويل الرسالة كاملة عند الإرسال. الخطوط العربية تُطبَّق على الرسالة كاملة.</div>'
+      + '<button class="notif-toggle" id="fxGlow" style="margin-top:12px"><span class="opt-txt"><b>توهج وتلوين النص</b><small>يتلوّن النص ويتوهج مثل اسم الموقع في الأعلى</small></span><span class="switch"></span></button></div></div>';
     const grid = $('fxGrid');
     Object.keys(T).forEach((k) => {
       const tl = mk('div', 'fx-tile'); tl.dataset.fx = k;
@@ -594,6 +620,14 @@
     $('fxSplAll').addEventListener('click', () => setSpl(!splAll));
     $('fxSplSel').addEventListener('click', wrapSel);
     $('fxDemoSpl').addEventListener('click', (e) => e.currentTarget.classList.toggle('open'));
+    const fg = $('fxFonts');
+    ['bold', 'bi', 'mono', 'resalaty', 'lemon', 'moshref'].forEach((m) => {
+      const bt = mk('button', 'fx-font ff-s-' + m); bt.type = 'button'; bt.textContent = MB[m] ? mathify('Bold' === FN[m] ? 'Bold' : m === 'bi' ? 'Bold' : 'Mono', m) : FN[m];
+      if (FONTS[m]) loadFont(m);
+      bt.addEventListener('click', () => { if (MB[m] && input.selectionStart !== input.selectionEnd) { convertSel(m); return; } setFont(m); });
+      fg.appendChild(bt); fontBtns[m] = bt;
+    });
+    $('fxGlow').addEventListener('click', () => { glowOn = !glowOn; applyComposer(); if (glowOn) { closePanel(); focusInput(); } });
     applyComposer();
   }
   function openPanel() {
@@ -616,5 +650,5 @@
   btn.addEventListener('click', () => { if (panelOpen) closePanel(); else openPanel(); });
   document.addEventListener('pointerdown', (e) => { if (panelOpen && !e.target.closest('.fx-panel') && !e.target.closest('#fxToggleBtn')) closePanel(); }, true);
 
-  window.FRFx = { vanish, screen: (k) => { if (k !== 'gift') screen(k); }, after, tap, edited, clear, quote, search, outgoing, closePanel, isOpen: () => panelOpen || !!cur || splAll };
+  window.FRFx = { vanish, screen: (k) => { if (k !== 'gift') screen(k); }, after, tap, edited, clear, quote, search, outgoing, closePanel, isOpen: () => panelOpen || !!cur || splAll || !!fontMode || glowOn };
 })();
