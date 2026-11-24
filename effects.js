@@ -249,8 +249,8 @@
     sakura: [{ pl: 30, pt: 20, pr: 30, pb: 64, H: 26, R: 17 }, { pl: 20, pt: 24, pr: 20, pb: 34, H: 42, R: 28 }]
   };
   const flw = (x, y, r) => { let s = '<g transform="translate(' + x + ' ' + y + ')">'; for (let i = 0; i < 5; i++) s += '<ellipse cx="0" cy="' + (-r * .62) + '" rx="' + (r * .5) + '" ry="' + (r * .68) + '" transform="rotate(' + i * 72 + ')" fill="#ffb8d1" stroke="#e5668f" stroke-width=".3"/>'; return s + '<circle r="' + (r * .24) + '" fill="#c2335f"/></g>'; };
-  const FL = [[24, 7, 3.6], [36, 4, 3.2], [50, 4, 3.8], [62, 6, 3.3], [74, 10, 3.6], [88, 11, 3.2], [100, 8, 3.4], [110, 5, 3], [34, 17, 3.8], [46, 22, 3.4], [60, 27, 4], [74, 34, 3.6], [86, 40, 3.5], [98, 45, 3.8], [110, 55, 3.2], [23, 22, 3.4], [21, 34, 3.6], [15, 46, 3.3], [11, 60, 3], [63, -1, 3.2], [57, 40, 3.1], [54, 49, 3.3], [98, 34, 3.1], [108, 35, 2.9], [82, 20, 3.1], [40, 13, 2.8], [68, 20, 2.7]];
-  const TREE = '<svg viewBox="0 0 120 70" width="130" height="76" overflow="visible"><g fill="none" stroke="var(--bk,#4a2c20)" stroke-linecap="round"><path d="M-10 -4C4 0 16 4 28 13" stroke-width="6.5"/><path d="M26 12C42 20 58 24 74 34C88 42 100 47 114 58" stroke-width="3.4"/><path d="M18 8C34 2 52 3 68 8C82 12 96 10 112 5" stroke-width="2.4"/><path d="M26 14C21 25 24 37 17 50C14 56 12 60 10 66" stroke-width="2.6"/><path d="M50 4C54 -1 60 -3 66 -1" stroke-width="1.4"/><path d="M58 26C61 34 59 42 54 51" stroke-width="1.6"/><path d="M84 41C90 35 99 33 109 35" stroke-width="1.5"/><path d="M70 9C72 16 78 20 84 20" stroke-width="1.3"/></g>'
+  const FL = [[34, 2, 3.2], [48, 0, 3.4], [64, 0, 3], [82, 2, 3.4], [98, 4, 3], [116, 5, 3.4], [132, 4, 3], [146, 6, 2.8], [36, 11, 3.6], [52, 13, 3.2], [66, 10, 3.4], [90, 10, 3.6], [104, 13, 3], [122, 16, 3.4], [138, 17, 3], [148, 19, 2.8], [41, 26, 3], [77, 25, 3], [107, 26, 3], [18, 4, 3.4], [26, 11, 3.2]];
+  const TREE = '<svg viewBox="0 0 150 30" width="150" height="30"><g fill="none" stroke="var(--bk,#4a2c20)" stroke-linecap="round"><path d="M-8 -2C4 0 14 4 24 9" stroke-width="6"/><path d="M22 8C48 15 78 7 108 14C124 18 138 15 154 19" stroke-width="3"/><path d="M24 6C50 -3 80 0 114 4C130 6 142 3 156 5" stroke-width="2.2"/><path d="M44 12C47 19 45 25 40 29" stroke-width="1.5"/><path d="M80 9C83 16 81 23 76 28" stroke-width="1.5"/><path d="M110 14C113 20 111 25 106 29" stroke-width="1.4"/></g>'
     + FL.map((f) => flw(f[0], f[1], f[2])).join('') + '</svg>';
   const HEART = '<svg viewBox="0 0 32 30" width="100%" height="100%"><defs><linearGradient id="hrA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff7db3"/><stop offset="1" stop-color="#d6336c"/></linearGradient></defs>'
     + '<path d="M16 29C6 21 1 15 1 9C1 4 5 1 9 1C12 1 15 3 16 6C17 3 20 1 23 1C27 1 31 4 31 9C31 15 26 21 16 29Z" fill="url(#hrA)"/><ellipse cx="9" cy="8" rx="3" ry="2" fill="#fff" opacity=".45" transform="rotate(-30 9 8)"/></svg>';
@@ -356,14 +356,24 @@
   }
 
   // ---------- message fonts (English = Unicode styles, Arabic = web fonts) + glowing text ----------
-  const FN = { bold: 'Bold', bi: 'Bold Italic', mono: 'Monospace', resalaty: 'رسالتي', lemon: 'ليمون', moshref: 'المشرف' };
-  const FONTS = { resalaty: { q: 'Playpen+Sans+Arabic:wght@400;600' }, lemon: { q: 'Katibeh' }, moshref: { q: 'Amiri:wght@400;700' } };
-  const MB = { bold: [0x1D400, 0x1D41A, 0x1D7CE], bi: [0x1D468, 0x1D482, 0x1D7CE], mono: [0x1D670, 0x1D68A, 0x1D7F6] };
+  const FN = { bold: 'Bold', bi: 'Bold Italic', mono: 'Monospace', script: 'Script', fraktur: 'Fraktur', double: 'Double', sans: 'Sans Bold', fancy: 'Friends', resalaty: 'رسالتي', lemon: 'ليمون', moshref: 'المشرف', barada: 'بارادا ريكا', hebah: 'هيباه', tharwat: 'ثروت رقعة', tharwatl: 'ثروت رقعة رفيع', tharwat2: 'ثروت رقعة رفيع 2' };
+  const EN = ['bold', 'bi', 'mono', 'script', 'fraktur', 'double', 'sans', 'fancy'], AR = ['resalaty', 'lemon', 'moshref', 'barada', 'hebah', 'tharwat', 'tharwatl', 'tharwat2'];
+  const FONTS = { resalaty: { q: 'Playpen+Sans+Arabic:wght@400;600' }, lemon: { q: 'Katibeh' }, moshref: { q: 'Amiri:wght@400;700' }, barada: { q: 'Aref+Ruqaa+Ink:wght@400;700' }, hebah: { q: 'Mirza:wght@400;600' }, tharwat: { q: 'Aref+Ruqaa:wght@400;700' }, tharwatl: { q: 'Aref+Ruqaa:wght@400;700' }, tharwat2: { q: 'Aref+Ruqaa+Ink:wght@400;700' } };
+  const MB = { bold: [0x1D400, 0x1D41A, 0x1D7CE], bi: [0x1D468, 0x1D482, 0x1D7CE], mono: [0x1D670, 0x1D68A, 0x1D7F6], script: [0x1D4D0, 0x1D4EA, 0x1D7CE], fraktur: [0x1D56C, 0x1D586, 0x1D7CE], double: [0x1D538, 0x1D552, 0x1D7D8], sans: [0x1D5D4, 0x1D5EE, 0x1D7EC] };
+  const DBL = { C: 'ℂ', H: 'ℍ', N: 'ℕ', P: 'ℙ', Q: 'ℚ', R: 'ℝ', Z: 'ℤ' };
+  const FA = Array.from('ꪖ᥇ᥴᦔꫀᠻᧁꫝ𝓲ꪝᛕꪶꪑꪀꪮρꪇ𝘳𝘴ꪻꪊꪜ᭙᥊ꪗɀ');   // same letter shapes as the site name
+  const isEn = (m) => !!MB[m] || m === 'fancy';
   const loadedF = {};
-  function loadFont(k) { if (!FONTS[k] || loadedF[k]) return; loadedF[k] = 1; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + FONTS[k].q + '&display=swap'; document.head.appendChild(l); }
+  function loadFont(k) { const f = FONTS[k]; if (!f || loadedF[f.q]) return; loadedF[f.q] = 1; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f.q + '&display=swap'; document.head.appendChild(l); }
+  const conv = (c, m) => {
+    const n = c.charCodeAt(0);
+    if (m === 'fancy') return n >= 97 ? (n <= 122 ? FA[n - 97] : c) : (n >= 65 && n <= 90 ? FA[n - 65] : c);
+    if (m === 'double' && DBL[c]) return DBL[c];
+    const b = MB[m]; return String.fromCodePoint(n >= 97 ? b[1] + n - 97 : n >= 65 ? b[0] + n - 65 : b[2] + n - 48);
+  };
   function mathify(t, m) {
-    const b = MB[m]; if (!b) return t;
-    return t.split(/(@[A-Za-z0-9_]+|https?:\/\/\S+|www\.\S+|`[^`]*`)/).map((s, i) => i % 2 ? s : s.replace(/[A-Za-z0-9]/g, (c) => { const n = c.charCodeAt(0); return String.fromCodePoint(n >= 97 ? b[1] + n - 97 : n >= 65 ? b[0] + n - 65 : b[2] + n - 48); })).join('');
+    if (!isEn(m)) return t;
+    return t.split(/(@[A-Za-z0-9_]+|https?:\/\/\S+|www\.\S+|`[^`]*`)/).map((s, i) => i % 2 ? s : s.replace(/[A-Za-z0-9]/g, (c) => conv(c, m))).join('');
   }
   const clamp1k = (t) => { let o = '', n = 0; for (const ch of t) { n += ch.length; if (n > 1000) break; o += ch; } return o; };
 
@@ -585,7 +595,7 @@
   function outgoing(text) {
     let t = text;
     if (splAll && !new RegExp('^' + SPL + '$').test(t)) t = '||' + (t.length > 996 ? t.slice(0, 996) : t) + '||';
-    if (MB[fontMode]) t = clamp1k(mathify(t, fontMode));
+    if (isEn(fontMode)) t = clamp1k(mathify(t, fontMode));
     const fx = cur, ff = FONTS[fontMode] ? fontMode : '', gl = glowOn; cur = ''; splAll = false; fontMode = ''; glowOn = false; applyComposer();
     return { text: t, fx, ff, gl };
   }
@@ -620,12 +630,16 @@
     $('fxSplAll').addEventListener('click', () => setSpl(!splAll));
     $('fxSplSel').addEventListener('click', wrapSel);
     $('fxDemoSpl').addEventListener('click', (e) => e.currentTarget.classList.toggle('open'));
-    const fg = $('fxFonts');
-    ['bold', 'bi', 'mono', 'resalaty', 'lemon', 'moshref'].forEach((m) => {
-      const bt = mk('button', 'fx-font ff-s-' + m); bt.type = 'button'; bt.textContent = MB[m] ? mathify('Bold' === FN[m] ? 'Bold' : m === 'bi' ? 'Bold' : 'Mono', m) : FN[m];
-      if (FONTS[m]) loadFont(m);
-      bt.addEventListener('click', () => { if (MB[m] && input.selectionStart !== input.selectionEnd) { convertSel(m); return; } setFont(m); });
-      fg.appendChild(bt); fontBtns[m] = bt;
+    const fg = $('fxFonts'), SAMPLE = { bold: 'Bold', bi: 'Bold', mono: 'Mono', script: 'Script', fraktur: 'Fraktur', double: 'Double', sans: 'Sans', fancy: 'Friends' };
+    [['English', EN], ['العربية', AR]].forEach(([lab, list]) => {
+      fg.appendChild(mk('div', 'fx-flab', lab));
+      const row = mk('div', 'fx-fgrid'); fg.appendChild(row);
+      list.forEach((m) => {
+        const bt = mk('button', 'fx-font ff-s-' + m); bt.type = 'button'; bt.textContent = isEn(m) ? mathify(SAMPLE[m], m) : FN[m];
+        if (FONTS[m]) loadFont(m);
+        bt.addEventListener('click', () => { if (isEn(m) && input.selectionStart !== input.selectionEnd) { convertSel(m); return; } setFont(m); });
+        row.appendChild(bt); fontBtns[m] = bt;
+      });
     });
     $('fxGlow').addEventListener('click', () => { glowOn = !glowOn; applyComposer(); if (glowOn) { closePanel(); focusInput(); } });
     applyComposer();

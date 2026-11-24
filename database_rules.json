@@ -101,7 +101,7 @@
             ".validate": "newData.isString() && newData.val().matches(/^(fire|gift|ice|love|galaxy|sakura|thunder|gold)$/)"
           },
           "ff": {
-            ".validate": "newData.isString() && newData.val().matches(/^(resalaty|lemon|moshref)$/)"
+            ".validate": "newData.isString() && newData.val().matches(/^(resalaty|lemon|moshref|barada|hebah|tharwat|tharwatl|tharwat2)$/)"
           },
           "gl": {
             ".validate": "newData.isBoolean() && newData.val() === true"

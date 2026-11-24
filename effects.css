@@ -345,3 +345,30 @@
 .fx-tile[data-fx="sakura"] .fx-stage { padding-top: 26px; }
 /* lemon: thick brush look */
 .ff-s-lemon, .msg-bubble.ff-lemon .msg-text { font-family: 'Katibeh', 'Noto Sans Arabic', sans-serif; font-size: 1.35em; line-height: 1.3; -webkit-text-stroke: .7px currentColor; }
+
+/* ===== v12: blossom band INSIDE the top of the frame (never over the text), 16 fonts ===== */
+.msg-bubble.fx[data-fx="sakura"] { padding-top: 32px; }
+.sak-tree, .sak-tree.l, .sak-tree.bar { position: absolute; left: 0; right: 0; top: 0; bottom: auto; width: auto; height: 30px; inset: 0 0 auto 0; overflow: hidden; border-radius: 17px 17px 0 0; z-index: 0; opacity: .95;
+  -webkit-mask-image: none; mask-image: none; animation: none; transform: none; pointer-events: none; }
+.sak-tree svg, .sak-tree.l svg { position: absolute; left: 0; top: 0; width: 150px; height: 30px; transform: none; }
+.sak-tree.l svg { left: auto; right: 0; transform: scaleX(-1); }
+.sak-tree.bar { z-index: -1; --bk: #a87560; height: 24px; border-radius: 28px 28px 0 0; }
+.fxc.front { z-index: 0; }
+.composer-glass .fxc.front { z-index: -1; }
+.msg-row.fxo-row3 { margin-top: 6px; margin-bottom: 20px; }
+.fx-tile[data-fx="sakura"] .fx-stage { padding-top: 26px; }
+.fx-flab { font-size: 11.5px; font-weight: 700; color: var(--text-3); margin: 10px 2px 6px; }
+.fx-fgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fx-font { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; }
+/* Arabic fonts: drop the original .ttf/.woff2 files into /fonts/ for the exact look; closest free fonts are used until then */
+@font-face { font-family: 'FR Barada'; src: url('/fonts/barada.woff2') format('woff2'), url('/fonts/barada.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'FR Hebah'; src: url('/fonts/hebah.woff2') format('woff2'), url('/fonts/hebah.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'FR Tharwat'; src: url('/fonts/tharwat.woff2') format('woff2'), url('/fonts/tharwat.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'FR TharwatL'; src: url('/fonts/tharwat-light.woff2') format('woff2'), url('/fonts/tharwat-light.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'FR Tharwat2'; src: url('/fonts/tharwat-light2.woff2') format('woff2'), url('/fonts/tharwat-light2.ttf') format('truetype'); font-display: swap; }
+.ff-s-barada, .msg-bubble.ff-barada .msg-text { font-family: 'FR Barada', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 1.2em; }
+.ff-s-hebah, .msg-bubble.ff-hebah .msg-text { font-family: 'FR Hebah', 'Mirza', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 600; }
+.ff-s-tharwat, .msg-bubble.ff-tharwat .msg-text { font-family: 'FR Tharwat', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 700; }
+.ff-s-tharwatl, .msg-bubble.ff-tharwatl .msg-text { font-family: 'FR TharwatL', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 400; }
+.ff-s-tharwat2, .msg-bubble.ff-tharwat2 .msg-text { font-family: 'FR Tharwat2', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 700; }
+.fx-fonts { display: block; }
