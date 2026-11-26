@@ -363,6 +363,11 @@
   const DBL = { C: 'ℂ', H: 'ℍ', N: 'ℕ', P: 'ℙ', Q: 'ℚ', R: 'ℝ', Z: 'ℤ' };
   const FA = Array.from('ꪖ᥇ᥴᦔꫀᠻᧁꫝ𝓲ꪝᛕꪶꪑꪀꪮρꪇ𝘳𝘴ꪻꪊꪜ᭙᥊ꪗɀ');   // same letter shapes as the site name
   const isEn = (m) => !!MB[m] || m === 'fancy';
+  const DEM = (() => {
+    const o = {}; Object.keys(MB).forEach((k) => { const b = MB[k]; for (let i = 0; i < 26; i++) { o[String.fromCodePoint(b[0] + i)] = String.fromCharCode(65 + i); o[String.fromCodePoint(b[1] + i)] = String.fromCharCode(97 + i); } for (let i = 0; i < 10; i++) o[String.fromCodePoint(b[2] + i)] = String(i); });
+    Object.keys(DBL).forEach((c) => { o[DBL[c]] = c; }); FA.forEach((g, i) => { o[g] = String.fromCharCode(97 + i); }); return o;
+  })();
+  const demath = (t) => { let o = ''; for (const ch of t) o += DEM[ch] || ch; return o; };
   const loadedF = {};
   function loadFont(k) { const f = FONTS[k]; if (!f || loadedF[f.q]) return; loadedF[f.q] = 1; const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + f.q + '&display=swap'; document.head.appendChild(l); }
   const conv = (c, m) => {
@@ -546,7 +551,7 @@
       delete glass.dataset.fx;
       if (layer) { const l = layer; layer = null; l.classList.add('out'); setTimeout(() => l.remove(), 450); }
     }
-    glass.dataset.spl = splAll ? '1' : '';
+    glass.dataset.spl = splAll ? '1' : ''; input.dataset.ff = FONTS[fontMode] ? fontMode : ''; input.dataset.gl = glowOn ? '1' : ''; updSpell();
     input.placeholder = splAll ? 'رسالة مخفية…' : ph0;
     btn.classList.toggle('has', !!(cur || splAll));
     Object.keys(tiles).forEach((k) => tiles[k].classList.toggle('on', k === cur));
@@ -563,11 +568,11 @@
     };
     if (cur) add('t', 'قالب ' + T[cur].n, () => pick(''));
     if (splAll) add('s', 'رسالة مخفية', () => setSpl(false));
-    if (fontMode) add('f', 'خط ' + FN[fontMode], () => { fontMode = ''; applyComposer(); });
+    if (fontMode) add('f', 'خط ' + FN[fontMode], () => setMode(''));
     if (glowOn) add('g', 'نص متوهج', () => { glowOn = false; applyComposer(); });
     chipsEl.classList.toggle('has', !!chipsEl.firstChild);
   }
-  function focusInput() { setTimeout(() => { try { input.focus({ preventScroll: true }); } catch (e) {} }, 80); }
+  function focusInput() { setTimeout(() => { input.removeAttribute('inputmode'); try { input.focus({ preventScroll: true }); } catch (e) {} }, 80); }
   function pick(k) {
     if (k && k === cur) k = '';
     cur = k; applyComposer();
@@ -576,7 +581,21 @@
   }
   function setSpl(v) { splAll = v; applyComposer(); if (v) { closePanel(); focusInput(); } }
   const fontBtns = {};
-  function setFont(m) { fontMode = fontMode === m ? '' : m; if (FONTS[fontMode]) loadFont(fontMode); applyComposer(); if (fontMode) { closePanel(); focusInput(); } }
+  function setVal(nv, fire) {
+    const v = input.value, a = input.selectionStart, b = input.selectionEnd, cp = (i) => Array.from(v.slice(0, i)).length, ps = (n) => Array.from(nv).slice(0, n).join('').length;
+    input.value = nv; try { input.setSelectionRange(ps(cp(a)), ps(cp(b))); } catch (e) {}
+    if (fire) input.dispatchEvent(new Event('input'));
+  }
+  function reconvert(prev) {
+    if (!(isEn(prev) || isEn(fontMode)) || !input.value) return;
+    const v = input.value, nv = isEn(fontMode) ? mathify(demath(v), fontMode) : demath(v); if (nv !== v) setVal(nv, true);
+  }
+  function setMode(m) { const prev = fontMode; fontMode = m; if (FONTS[m]) loadFont(m); reconvert(prev); applyComposer(); }
+  function setFont(m) { setMode(fontMode === m ? '' : m); if (fontMode) { closePanel(); focusInput(); } }
+  const liveFix = (fire) => { if (!isEn(fontMode)) return; const v = input.value, nv = mathify(demath(v), fontMode); if (nv !== v) setVal(nv, fire); };
+  input.addEventListener('input', (e) => { if (!e.isComposing) liveFix(false); updSpell(); });
+  input.addEventListener('compositionend', () => liveFix(true));
+  function updSpell() { const want = !(fontMode || /[^\u0000-\u024F\u0600-\u06FF\u0750-\u077F\u2000-\u206F\s]/u.test(input.value)); if (input.spellcheck !== want) input.spellcheck = want; }
   function convertSel(m) {
     const v = input.value, a = input.selectionStart, b = input.selectionEnd; if (a == null || a === b) return false;
     const seg = mathify(v.slice(a, b), m); input.value = v.slice(0, a) + seg + v.slice(b); const p = a + seg.length;
@@ -651,18 +670,39 @@
     $('fxSplSel').classList.toggle('dim', input.selectionStart === input.selectionEnd);
     panel.classList.add('open'); btn.classList.add('active'); panelOpen = true;
     if (document.activeElement === input) input.blur();
+    input.setAttribute('inputmode', 'none');
     FRNav.push('fx', hidePanel); panelVis = true; demoFires.forEach((e) => e.setOn(e.vis));
     const g = panel.querySelector('.fx-stage .msg-bubble[data-fx="gift"]');
     if (g) giftTimer = setInterval(() => { const o = g.classList.toggle('opened'); if (o) { g.classList.add('revealing'); setTimeout(() => g.classList.remove('revealing'), 700); } }, 2800);
     if (C().expand) C().expand();
   }
   function hidePanel() {
-    panel.classList.remove('open'); btn.classList.remove('active'); panelOpen = false;
+    panel.classList.remove('open'); btn.classList.remove('active'); panelOpen = false; input.removeAttribute('inputmode');
     clearInterval(giftTimer); giftTimer = null; panelVis = false; demoFires.forEach((e) => e.setOn(false)); if (C().expand) C().expand();
   }
   function closePanel() { if (panelOpen) FRNav.back('fx'); }
   btn.addEventListener('click', () => { if (panelOpen) closePanel(); else openPanel(); });
-  document.addEventListener('pointerdown', (e) => { if (panelOpen && !e.target.closest('.fx-panel') && !e.target.closest('#fxToggleBtn')) closePanel(); }, true);
+  document.addEventListener('pointerdown', (e) => { if (panelOpen && !e.target.closest('.fx-panel') && !e.target.closest('.composer')) closePanel(); }, true);
+
+  (function keepSelection() {
+    const wrap = input.parentElement; if (!wrap) return;
+    const m = document.createElement('div'); m.className = 'sel-mirror'; m.setAttribute('aria-hidden', 'true'); wrap.appendChild(m);
+    const PROPS = ['fontFamily', 'fontSize', 'fontWeight', 'fontStyle', 'lineHeight', 'letterSpacing', 'wordSpacing', 'textAlign', 'direction', 'unicodeBidi', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'textIndent', 'tabSize'];
+    let tm = null, lastV = '', lastS = 0, lastE = 0;
+    const hide = () => { m.classList.remove('on'); clearInterval(tm); tm = null; };
+    const show = () => {
+      const a = input.selectionStart, b = input.selectionEnd;
+      if (a == null || a === b || document.activeElement === input) { hide(); return; }
+      const cs = getComputedStyle(input); PROPS.forEach((p) => { m.style[p] = cs[p]; });
+      m.style.left = input.offsetLeft + 'px'; m.style.top = input.offsetTop + 'px'; m.style.width = input.clientWidth + 'px'; m.style.height = input.clientHeight + 'px';
+      const v = input.value; m.textContent = ''; m.appendChild(document.createTextNode(v.slice(0, a)));
+      const mk2 = document.createElement('mark'); mk2.textContent = v.slice(a, b); m.appendChild(mk2); m.appendChild(document.createTextNode(v.slice(b) + '\u200b'));
+      m.scrollTop = input.scrollTop; lastV = v; lastS = a; lastE = b; m.classList.add('on');
+      if (!tm) tm = setInterval(() => { if (input.value !== lastV || input.selectionStart !== lastS || input.selectionEnd !== lastE || document.activeElement === input) hide(); }, 150);
+    };
+    input.addEventListener('blur', () => setTimeout(show, 30));
+    ['focus', 'input'].forEach((ev) => input.addEventListener(ev, hide));
+  })();
 
   window.FRFx = { vanish, screen: (k) => { if (k !== 'gift') screen(k); }, after, tap, edited, clear, quote, search, outgoing, closePanel, isOpen: () => panelOpen || !!cur || splAll || !!fontMode || glowOn };
 })();

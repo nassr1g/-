@@ -2927,7 +2927,7 @@
   }
 
   document.addEventListener('pointerdown', (e) => {
-    if (emojiPanelOpen && !e.target.closest('.emoji-panel') && !e.target.closest('#emojiToggleBtn')) closeEmojiPanel();
+    if (emojiPanelOpen && !e.target.closest('.emoji-panel') && !e.target.closest('#emojiToggleBtn') && !e.target.closest('#sendBtn')) closeEmojiPanel();
   }, true);
 
   document.addEventListener('visibilitychange', () => {
@@ -3268,10 +3268,55 @@
     place();
   })();
 
+  // ---------- date picker: jump to the first message of an exact day (opened by tapping the floating date) ----------
+  async function goToDay(ds) {
+    const de = ds + 864e5; showToast('جارٍ البحث عن رسائل ذلك اليوم...', null, null, false, 1500);
+    let oldest = await Store.oldest(), guard = 0;
+    while (!historyComplete && oldest && oldest.timestamp > ds && guard++ < 80 && isConnected) { const page = await fetchOlderPage(); if (!page.length) break; oldest = await Store.oldest(); }
+    const list = await Store.after(ds - 1, '', 60);
+    const m = list.find((x) => (Number(x.timestamp) || 0) >= ds && (Number(x.timestamp) || 0) < de && !isHiddenLocal(x.k, x));
+    if (!m) { showToast('لا توجد رسائل في هذا اليوم', null, null, true, 2600); return; }
+    pinnedToBottom = false; kbHold = 0;
+    await jumpToMessage(m.k);
+  }
+  async function openDatePicker(initTs) {
+    if (document.querySelector('.dp-sheet')) return;
+    const sd = (t) => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+    const oldest = await Store.oldest(), today = sd(Date.now());
+    const minDay = oldest ? sd(oldest.timestamp) - (historyComplete ? 0 : 400 * 864e5) : today;
+    const sel = sd(initTs || Date.now()); let view = new Date(sel); view = new Date(view.getFullYear(), view.getMonth(), 1);
+    const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; };
+    const backdrop = el('div', 'sheet-backdrop'), sheet = el('div', 'sheet dp-sheet'), head = el('div', 'dp-head'), title = el('div', 'dp-title');
+    const nav = (d) => { const b = el('button', 'dp-nav'); b.type = 'button'; b.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="' + d + '" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>'; return b; };
+    const prev = nav('M9 6l6 6-6 6'), next = nav('M15 6l-6 6 6 6');   // RTL: the right arrow goes back in time
+    head.appendChild(prev); head.appendChild(title); head.appendChild(next);
+    const wd = el('div', 'dp-wd'); ['س', 'ح', 'ن', 'ث', 'ر', 'خ', 'ج'].forEach((d) => wd.appendChild(el('span', '', d)));
+    const grid = el('div', 'dp-grid'), foot = el('div', 'dp-foot'), tb = el('button', 'dp-today', 'اليوم'); tb.type = 'button'; foot.appendChild(tb);
+    const handle = el('div', 'sheet-handle'); sheet.appendChild(handle); [head, wd, grid, foot].forEach((n) => sheet.appendChild(n)); backdrop.appendChild(sheet);
+    const go = (ts) => { FRNav.back('sheet'); setTimeout(() => goToDay(ts), 320); };
+    const draw = () => {
+      const y = view.getFullYear(), mo = view.getMonth();
+      title.textContent = view.toLocaleDateString('ar-u-nu-latn', { month: 'long', year: 'numeric' }); grid.textContent = '';
+      for (let i = (new Date(y, mo, 1).getDay() + 1) % 7; i > 0; i--) grid.appendChild(el('span'));
+      for (let d = 1, n = new Date(y, mo + 1, 0).getDate(); d <= n; d++) {
+        const ts = new Date(y, mo, d).getTime(), b = el('button', 'dp-d' + (ts === today ? ' today' : '') + (ts === sel ? ' sel' : ''), String(d)); b.type = 'button';
+        if (ts > today || ts < minDay) b.disabled = true; else b.addEventListener('click', () => go(ts));
+        grid.appendChild(b);
+      }
+      prev.disabled = new Date(y, mo, 0).getTime() < minDay; next.disabled = new Date(y, mo + 1, 1).getTime() > today;
+    };
+    prev.addEventListener('click', () => { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); draw(); });
+    next.addEventListener('click', () => { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); draw(); });
+    tb.addEventListener('click', () => go(today));
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) FRNav.back('sheet'); });
+    draw(); document.body.appendChild(backdrop); FRNav.push('sheet', () => backdrop.remove());
+  }
+
   // ---------- floating date: shows the day of the top message while scrolling (like WhatsApp / Telegram) ----------
   (function floatingDate() {
     const pill = document.createElement('div'), lbl = document.createElement('span');
     pill.className = 'float-date'; pill.appendChild(lbl); document.querySelector('.app').appendChild(pill);
+    pill.addEventListener('click', (e) => { e.stopPropagation(); clearTimeout(hideT); openDatePicker(pill._ts); });
     let hideT = null, raf = 0, last = '', userT = 0;
     const mark = () => { userT = Date.now(); };
     const cur = () => {
@@ -3284,7 +3329,7 @@
       if (!el) return;
       const text = dayLabel(Number(el.dataset.ts) || Date.now());
       if (text !== last) { last = text; lbl.textContent = text; pill.classList.remove('tick'); void pill.offsetWidth; pill.classList.add('tick'); }
-      pill.classList.add('show'); clearTimeout(hideT); hideT = setTimeout(() => pill.classList.remove('show'), 1300);
+      pill._ts = Number(el.dataset.ts) || Date.now(); pill.classList.add('show'); clearTimeout(hideT); hideT = setTimeout(() => pill.classList.remove('show'), 2600);
     };
     [messagesWrap, $('fastScroll')].forEach((n) => n && ['touchstart', 'touchmove', 'touchend', 'wheel', 'pointerdown'].forEach((ev) => n.addEventListener(ev, mark, { passive: true })));
     messagesWrap.addEventListener('scroll', () => { if (Date.now() - userT < 3000 && !raf) raf = requestAnimationFrame(cur); }, { passive: true });

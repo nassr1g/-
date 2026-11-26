@@ -372,3 +372,32 @@
 .ff-s-tharwatl, .msg-bubble.ff-tharwatl .msg-text { font-family: 'FR TharwatL', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 400; }
 .ff-s-tharwat2, .msg-bubble.ff-tharwat2 .msg-text { font-family: 'FR Tharwat2', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 700; }
 .fx-fonts { display: block; }
+
+/* ===== v13: composer font preview, persistent selection, date picker ===== */
+.composer-input-wrap { position: relative; }
+.sel-mirror { position: absolute; pointer-events: none; overflow: hidden; white-space: pre-wrap; word-wrap: break-word; color: transparent; opacity: 0; transition: opacity .15s ease; z-index: 1; }
+.sel-mirror.on { opacity: 1; }
+.sel-mirror mark { background: rgba(155,89,182,.5); color: transparent; border-radius: 3px; }
+.composer-input[data-ff="resalaty"] { font-family: 'Playpen Sans Arabic', 'Noto Sans Arabic', sans-serif; }
+.composer-input[data-ff="lemon"] { font-family: 'Katibeh', 'Noto Sans Arabic', sans-serif; font-size: 21px; }
+.composer-input[data-ff="moshref"] { font-family: 'Amiri', 'Noto Sans Arabic', serif; font-size: 18px; font-weight: 700; }
+.composer-input[data-ff="barada"] { font-family: 'FR Barada', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 19px; }
+.composer-input[data-ff="hebah"] { font-family: 'FR Hebah', 'Mirza', 'Noto Sans Arabic', serif; font-size: 19px; font-weight: 600; }
+.composer-input[data-ff="tharwat"] { font-family: 'FR Tharwat', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 19px; font-weight: 700; }
+.composer-input[data-ff="tharwatl"] { font-family: 'FR TharwatL', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 19px; }
+.composer-input[data-ff="tharwat2"] { font-family: 'FR Tharwat2', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 19px; font-weight: 700; }
+.composer-glass .composer-input[data-gl="1"] { font-weight: 700; background-image: linear-gradient(100deg, var(--neon-cyan), var(--accent-light) 35%, var(--neon-pink) 65%, var(--neon-cyan) 100%); background-size: 300% auto; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: brandGlowShift 6s linear infinite; }
+.float-date.show { pointer-events: auto; cursor: pointer; }
+.dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.dp-title { font-size: 15px; font-weight: 700; color: var(--text-1); }
+.dp-nav { width: 38px; height: 38px; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-1); background: rgba(255,255,255,.08); transition: transform .25s cubic-bezier(.34,1.56,.64,1), opacity .2s; }
+.dp-nav:active { transform: scale(.86); } .dp-nav:disabled { opacity: .3; pointer-events: none; }
+.dp-wd, .dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.dp-wd span { text-align: center; font-size: 11.5px; font-weight: 700; color: var(--text-3); padding: 4px 0; }
+.dp-d { aspect-ratio: 1; border: none; border-radius: 50%; font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text-1); background: transparent; cursor: pointer; transition: background .2s ease, transform .25s cubic-bezier(.34,1.56,.64,1); }
+.dp-d:active { transform: scale(.88); background: rgba(155,89,182,.3); }
+.dp-d.today { box-shadow: inset 0 0 0 1.5px var(--neon-cyan); color: var(--neon-cyan); }
+.dp-d.sel { background: linear-gradient(135deg, var(--accent-1), var(--accent-2)); color: #fff; box-shadow: 0 4px 14px rgba(123,79,201,.5); }
+.dp-d:disabled { opacity: .25; pointer-events: none; }
+.dp-foot { display: flex; justify-content: center; margin-top: 10px; }
+.dp-today { border: 1px solid rgba(95,241,224,.45); background: rgba(95,241,224,.1); color: var(--neon-cyan); font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 18px; border-radius: 999px; cursor: pointer; }
