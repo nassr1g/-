@@ -366,11 +366,11 @@
 @font-face { font-family: 'FR Tharwat'; src: url('/fonts/tharwat.woff2') format('woff2'), url('/fonts/tharwat.ttf') format('truetype'); font-display: swap; }
 @font-face { font-family: 'FR TharwatL'; src: url('/fonts/tharwat-light.woff2') format('woff2'), url('/fonts/tharwat-light.ttf') format('truetype'); font-display: swap; }
 @font-face { font-family: 'FR Tharwat2'; src: url('/fonts/tharwat-light2.woff2') format('woff2'), url('/fonts/tharwat-light2.ttf') format('truetype'); font-display: swap; }
-.ff-s-barada, .msg-bubble.ff-barada .msg-text { font-family: 'FR Barada', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 1.2em; }
+.ff-s-barada, .msg-bubble.ff-barada .msg-text { font-family: 'FR Barada', 'Gulzar', 'Noto Sans Arabic', serif; font-size: 1.2em; }
 .ff-s-hebah, .msg-bubble.ff-hebah .msg-text { font-family: 'FR Hebah', 'Mirza', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 600; }
 .ff-s-tharwat, .msg-bubble.ff-tharwat .msg-text { font-family: 'FR Tharwat', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 700; }
 .ff-s-tharwatl, .msg-bubble.ff-tharwatl .msg-text { font-family: 'FR TharwatL', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 400; }
-.ff-s-tharwat2, .msg-bubble.ff-tharwat2 .msg-text { font-family: 'FR Tharwat2', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 700; }
+.ff-s-tharwat2, .msg-bubble.ff-tharwat2 .msg-text { font-family: 'FR Tharwat2', 'Lateef', 'Noto Sans Arabic', serif; font-size: 1.2em; font-weight: 700; }
 .fx-fonts { display: block; }
 
 /* ===== v13: composer font preview, persistent selection, date picker ===== */
@@ -381,11 +381,11 @@
 .composer-input[data-ff="resalaty"] { font-family: 'Playpen Sans Arabic', 'Noto Sans Arabic', sans-serif; }
 .composer-input[data-ff="lemon"] { font-family: 'Katibeh', 'Noto Sans Arabic', sans-serif; font-size: 21px; }
 .composer-input[data-ff="moshref"] { font-family: 'Amiri', 'Noto Sans Arabic', serif; font-size: 18px; font-weight: 700; }
-.composer-input[data-ff="barada"] { font-family: 'FR Barada', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 19px; }
+.composer-input[data-ff="barada"] { font-family: 'FR Barada', 'Gulzar', 'Noto Sans Arabic', serif; font-size: 19px; }
 .composer-input[data-ff="hebah"] { font-family: 'FR Hebah', 'Mirza', 'Noto Sans Arabic', serif; font-size: 19px; font-weight: 600; }
 .composer-input[data-ff="tharwat"] { font-family: 'FR Tharwat', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 19px; font-weight: 700; }
 .composer-input[data-ff="tharwatl"] { font-family: 'FR TharwatL', 'Aref Ruqaa', 'Noto Sans Arabic', serif; font-size: 19px; }
-.composer-input[data-ff="tharwat2"] { font-family: 'FR Tharwat2', 'Aref Ruqaa Ink', 'Noto Sans Arabic', serif; font-size: 19px; font-weight: 700; }
+.composer-input[data-ff="tharwat2"] { font-family: 'FR Tharwat2', 'Lateef', 'Noto Sans Arabic', serif; font-size: 19px; font-weight: 700; }
 .composer-glass .composer-input[data-gl="1"] { font-weight: 700; background-image: linear-gradient(100deg, var(--neon-cyan), var(--accent-light) 35%, var(--neon-pink) 65%, var(--neon-cyan) 100%); background-size: 300% auto; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: brandGlowShift 6s linear infinite; }
 .float-date.show { pointer-events: auto; cursor: pointer; }
 .dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }

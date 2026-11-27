@@ -358,7 +358,7 @@
   // ---------- message fonts (English = Unicode styles, Arabic = web fonts) + glowing text ----------
   const FN = { bold: 'Bold', bi: 'Bold Italic', mono: 'Monospace', script: 'Script', fraktur: 'Fraktur', double: 'Double', sans: 'Sans Bold', fancy: 'Friends', resalaty: 'رسالتي', lemon: 'ليمون', moshref: 'المشرف', barada: 'بارادا ريكا', hebah: 'هيباه', tharwat: 'ثروت رقعة', tharwatl: 'ثروت رقعة رفيع', tharwat2: 'ثروت رقعة رفيع 2' };
   const EN = ['bold', 'bi', 'mono', 'script', 'fraktur', 'double', 'sans', 'fancy'], AR = ['resalaty', 'lemon', 'moshref', 'barada', 'hebah', 'tharwat', 'tharwatl', 'tharwat2'];
-  const FONTS = { resalaty: { q: 'Playpen+Sans+Arabic:wght@400;600' }, lemon: { q: 'Katibeh' }, moshref: { q: 'Amiri:wght@400;700' }, barada: { q: 'Aref+Ruqaa+Ink:wght@400;700' }, hebah: { q: 'Mirza:wght@400;600' }, tharwat: { q: 'Aref+Ruqaa:wght@400;700' }, tharwatl: { q: 'Aref+Ruqaa:wght@400;700' }, tharwat2: { q: 'Aref+Ruqaa+Ink:wght@400;700' } };
+  const FONTS = { resalaty: { q: 'Playpen+Sans+Arabic:wght@400;600' }, lemon: { q: 'Katibeh' }, moshref: { q: 'Amiri:wght@400;700' }, barada: { q: 'Gulzar' }, hebah: { q: 'Mirza:wght@400;600' }, tharwat: { q: 'Aref+Ruqaa:wght@400;700' }, tharwatl: { q: 'Aref+Ruqaa:wght@400;700' }, tharwat2: { q: 'Lateef:wght@400;700' } };
   const MB = { bold: [0x1D400, 0x1D41A, 0x1D7CE], bi: [0x1D468, 0x1D482, 0x1D7CE], mono: [0x1D670, 0x1D68A, 0x1D7F6], script: [0x1D4D0, 0x1D4EA, 0x1D7CE], fraktur: [0x1D56C, 0x1D586, 0x1D7CE], double: [0x1D538, 0x1D552, 0x1D7D8], sans: [0x1D5D4, 0x1D5EE, 0x1D7EC] };
   const DBL = { C: 'ℂ', H: 'ℍ', N: 'ℕ', P: 'ℙ', Q: 'ℚ', R: 'ℝ', Z: 'ℤ' };
   const FA = Array.from('ꪖ᥇ᥴᦔꫀᠻᧁꫝ𝓲ꪝᛕꪶꪑꪀꪮρꪇ𝘳𝘴ꪻꪊꪜ᭙᥊ꪗɀ');   // same letter shapes as the site name
