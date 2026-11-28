@@ -401,3 +401,6 @@
 .dp-d:disabled { opacity: .25; pointer-events: none; }
 .dp-foot { display: flex; justify-content: center; margin-top: 10px; }
 .dp-today { border: 1px solid rgba(95,241,224,.45); background: rgba(95,241,224,.1); color: var(--neon-cyan); font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 8px 18px; border-radius: 999px; cursor: pointer; }
+
+/* the effects panel folds away while the keyboard is open (so both never fight for the screen) and returns when it closes */
+.emoji-panel.fx-panel.open.kb { height: 0; padding-bottom: 0; opacity: 0; visibility: hidden; pointer-events: none; animation: none; transition: height .22s cubic-bezier(.22,.8,.24,1), opacity .18s ease, visibility 0s .22s; }

@@ -670,17 +670,18 @@
     $('fxSplSel').classList.toggle('dim', input.selectionStart === input.selectionEnd);
     panel.classList.add('open'); btn.classList.add('active'); panelOpen = true;
     if (document.activeElement === input) input.blur();
-    input.setAttribute('inputmode', 'none');
     FRNav.push('fx', hidePanel); panelVis = true; demoFires.forEach((e) => e.setOn(e.vis));
     const g = panel.querySelector('.fx-stage .msg-bubble[data-fx="gift"]');
     if (g) giftTimer = setInterval(() => { const o = g.classList.toggle('opened'); if (o) { g.classList.add('revealing'); setTimeout(() => g.classList.remove('revealing'), 700); } }, 2800);
     if (C().expand) C().expand();
   }
   function hidePanel() {
-    panel.classList.remove('open'); btn.classList.remove('active'); panelOpen = false; input.removeAttribute('inputmode');
+    panel.classList.remove('open'); btn.classList.remove('active'); panelOpen = false; panel.classList.remove('kb');
     clearInterval(giftTimer); giftTimer = null; panelVis = false; demoFires.forEach((e) => e.setOn(false)); if (C().expand) C().expand();
   }
   function closePanel() { if (panelOpen) FRNav.back('fx'); }
+  input.addEventListener('focus', () => { if (panelOpen) panel.classList.add('kb'); });
+  input.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== input) panel.classList.remove('kb'); }, 120));
   btn.addEventListener('click', () => { if (panelOpen) closePanel(); else openPanel(); });
   document.addEventListener('pointerdown', (e) => { if (panelOpen && !e.target.closest('.fx-panel') && !e.target.closest('.composer')) closePanel(); }, true);
 
