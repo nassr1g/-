@@ -543,7 +543,7 @@
     return hit;
   }
   const richCtx = () => ({ findUser: findUserByName, me: myLower(), copy: (t) => copyText(t, 1, 'تم نسخ الكود') });
-  function setMsgText(el, text) { Rich.render(el, text || '', richCtx()); }
+  function setMsgText(el, text) { if (window.FRTheme && FRTheme.isShare(text)) { FRTheme.renderCard(el, text); return; } Rich.render(el, text || '', richCtx()); }
   const mentionsMe = (text) => Rich.mentionsUser(text || '', myLower());
 
   // ---------- @mention suggestions (above the composer, never covering it) ----------
@@ -1774,7 +1774,7 @@
 
     function onPointerDown(e) {
       if (e.button !== undefined && e.button !== 0) return;
-      if (e.target.closest('.msg-avatar, .reaction-chip, .mention, a, .code-block')) return;
+      if (e.target.closest('.msg-avatar, .reaction-chip, .mention, a, .code-block, .thm-btn')) return;
       pointerId = e.pointerId;
       startX = e.clientX; startY = e.clientY;
       dx = 0; dy = 0;
@@ -1950,7 +1950,7 @@
     list.appendChild(makeCtxItem(checkGlyphMenu(), 'تحديد', () => { enterSelect(key); closeContextMenu(); }));
     if (mine && !data.deleted && !(allMessagesByKey.get(key) || {}).pending) list.appendChild(makeCtxItem(tickGlyphMenu(), 'حالة الرسالة', () => { closeContextMenu(); showReceipts(key); }));
 
-    if (mine && !data.deleted && !data.sticker) {
+    if (mine && !data.deleted && !data.sticker && !(window.FRTheme && FRTheme.isShare(data.text))) {
       list.appendChild(makeCtxItem(editGlyphMenu(), 'تعديل الرسالة', () => {
         closeContextMenu();
         if (!canEdit(key)) { showSystemError(EDIT_ERR); return; }
@@ -2083,7 +2083,7 @@
   function startReply(key, data) {
     data = (allMessagesByKey.get(key) || {}).data || data;
     cancelEdit();
-    activeReply = { key, sender: data.senderName || 'مجهول', text: window.FRFx ? FRFx.quote(data) : (data.text || '') };
+    activeReply = { key, sender: data.senderName || 'مجهول', text: quoteOf(data) };
     replyPreview.classList.remove('edit-mode');
     replyPreviewWho.textContent = activeReply.sender;
     replyPreviewTxt.textContent = activeReply.text;
@@ -3379,7 +3379,7 @@
     async function loadCorpus() { // every message saved on this device (older pages are read from IndexedDB in chunks)
       const map = new Map();
       const add = (m) => {
-        if (!m || m.deleted || m.pending || m.sticker || !m.text || isHiddenLocal(m.k, m)) return;
+        if (!m || m.deleted || m.pending || m.sticker || !m.text || String(m.text).indexOf('FRTHEME1:') === 0 || isHiddenLocal(m.k, m)) return;
         const tx = window.FRFx ? FRFx.search(m) : String(m.text); map.set(m.k, { k: m.k, ts: Number(m.timestamp) || 0, uid: m.senderUid, name: m.senderName, text: tx, s: nstr(tx) });
       };
       let page = await Store.recent(500);
@@ -3513,24 +3513,40 @@
   // ========================================================
   // Init
   // ========================================================
-  // ---------- themes (default / galaxy): saved on the account (users/<uid>/theme) + cached on the device ----------
+  // ---------- themes: built-in + user-made (saved on the account: users/<uid>/theme and users/<uid>/customThemes/<id>) ----------
   const THEMES = {"default": "#14091f", "galaxy": "#050a1c", "brown": "#120b06", "green": "#06100b", "pink": "#15070f", "orange": "#140a04", "night": "#040107"};
-  let curTheme = THEMES[document.documentElement.dataset.theme] ? document.documentElement.dataset.theme : 'default';
+  let customs = {}, curTheme = 'default', curKey = '';
+  const FT = () => window.FRTheme;
+  const keyOf = (t) => t + (customs[t] ? ':' + customs[t].v : '');
+  (function () { const d = document.documentElement.dataset.theme; try { if (THEMES[d]) curTheme = d; else if (d === 'custom') { curTheme = localStorage.getItem('fr_theme') || 'default'; curKey = curTheme + ':' + localStorage.getItem('fr_theme_v'); } } catch (e) {} if (!curKey) curKey = curTheme; })();
   function markThemeUI() { document.querySelectorAll('[data-theme-pick]').forEach((b) => b.classList.toggle('active', b.dataset.themePick === curTheme)); }
-  function applyTheme(t, animate) {
-    t = THEMES[t] ? t : 'default';
-    if (t === curTheme) { markThemeUI(); return; }
+  function applyTheme(t, animate, force) {
+    if (!THEMES[t] && !customs[t]) t = 'default';
+    const key = keyOf(t);
+    if (!force && key === curKey) { markThemeUI(); return; }
     const doc = document.documentElement;
     const run = () => {
-      if (t === 'default') delete doc.dataset.theme; else doc.dataset.theme = t;
-      curTheme = t;
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (customs[t] && FT() && FT().parse(customs[t].v)) {
+        doc.dataset.theme = 'custom'; FT().apply(FT().parse(customs[t].v), doc, true);
+        try { localStorage.setItem('fr_theme_v', customs[t].v); } catch (e) {}
+      } else {
+        if (FT()) FT().clear(doc);
+        if (t === 'default' || !THEMES[t]) { t = 'default'; delete doc.dataset.theme; } else doc.dataset.theme = t;
+        if (meta) meta.content = THEMES[t];
+      }
+      curTheme = t; curKey = keyOf(t);
       try { localStorage.setItem('fr_theme', t); } catch (e) {}
-      const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = THEMES[t];
       markThemeUI();
     };
     if (animate && document.startViewTransition && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) document.startViewTransition(run);
     else if (animate) { doc.classList.add('theme-anim'); run(); setTimeout(() => doc.classList.remove('theme-anim'), 650); }
     else run();
+  }
+  function syncTheme(p, animate) {
+    customs = (p && p.customThemes) || {};
+    if (FT()) { FT().renderList(); if (FT().busy()) return; }
+    applyTheme((p && p.theme) || 'default', animate);
   }
   $('themeGrid').addEventListener('click', (e) => {
     const b = e.target.closest('[data-theme-pick]'); if (!b) return;
@@ -3538,6 +3554,27 @@
     applyTheme(t, true);
     if (db && myUid) db.ref('users/' + myUid).update({ theme: t, updatedAt: SV() }).catch(() => showSystemError('تعذر حفظ المظهر في حسابك، سيبقى على هذا الجهاز فقط'));
   });
+  window.FRThemeHost = {
+    current: () => curTheme, customs: () => customs, apply: applyTheme,
+    save(id, name, v, activate) {
+      const up = {}, b = 'users/' + myUid + '/';
+      up[b + 'customThemes/' + id] = { name, v }; if (activate) up[b + 'theme'] = id; up[b + 'updatedAt'] = SV();
+      customs = Object.assign({}, customs, { [id]: { name, v } }); if (FT()) FT().renderList();
+      return db.ref().update(up).catch(() => showSystemError('تعذر حفظ الثيم في حسابك'));
+    },
+    remove(id) {
+      const up = {}, b = 'users/' + myUid + '/';
+      up[b + 'customThemes/' + id] = null; up[b + 'updatedAt'] = SV();
+      if (curTheme === id) up[b + 'theme'] = 'default';
+      const c = Object.assign({}, customs); delete c[id]; customs = c;
+      if (curTheme === id) applyTheme('default', true);
+      if (FT()) FT().renderList();
+      return db.ref().update(up).catch(() => showSystemError('تعذر حذف الثيم'));
+    },
+    send: (text) => queueMessage(text),
+    toast: (m, err) => showToast(m, null, null, !!err, 2800)
+  };
+  function quoteOf(d) { const s = FT() && FT().parseShare(d.text); return s ? 'ثيم مشارك: ' + s.name : (window.FRFx ? FRFx.quote(d) : (d.text || '')); }
 
   window.FRChat = { expand: () => updateComposerExpanded(), closeEmoji: () => closeEmojiPanel(), sendSticker: (s) => queueMessage('ملصق', s), toast: showToast, sheet: openActionSheet, db: () => db, uid: () => myUid, online: () => !!(isConnected && firebaseReady) };
 
@@ -3566,9 +3603,9 @@
     }
     FRAuth.start({
       db,
-      onReady: (p, isNew) => { myUid = p.uid; myName = p.displayName; myJoined = Number(p.hf) || 0; applyTheme(p.theme, false); bootChat(isNew); },
+      onReady: (p, isNew) => { myUid = p.uid; myName = p.displayName; myJoined = Number(p.hf) || 0; syncTheme(p, false); bootChat(isNew); },
       onProfile: (p) => {
-        myName = p.displayName; applyTheme(p.theme, true);
+        myName = p.displayName; syncTheme(p, true);
         if (pushToken && db) db.ref('chat/push/' + pushToken).update({ name: myName }).catch(() => {});
         if (usersRef && isConnected && document.visibilityState === 'visible') announcePresence();
       },

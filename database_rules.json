@@ -267,8 +267,22 @@
         "updatedAt": {
           ".validate": "newData.val() === now || (data.exists() && newData.val() === data.val())"
         },
+        "customThemes": {
+          "$tid": {
+            ".validate": "$tid.matches(/^c_[a-z0-9]{4,12}$/) && newData.hasChildren(['name','v'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20"
+            },
+            "v": {
+              ".validate": "newData.isString() && newData.val().length <= 200"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
         "theme": {
-          ".validate": "newData.isString() && newData.val().matches(/^(default|galaxy|brown|green|pink|orange|night)$/)"
+          ".validate": "newData.isString() && newData.val().matches(/^(default|galaxy|brown|green|pink|orange|night|c_[a-z0-9]{4,12})$/)"
         },
         "hf": {
           ".validate": "newData.val() === now || (data.exists() && newData.val() === data.val())"

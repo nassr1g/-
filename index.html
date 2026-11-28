@@ -14,7 +14,8 @@
 <link rel="icon" type="image/png" href="/icons/app-icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <title>ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ</title>
-<script>try{var T={galaxy:'#050a1c',brown:'#120b06',green:'#06100b',pink:'#15070f',orange:'#140a04',night:'#040107'},t=localStorage.getItem('fr_theme');if(T[t]){document.documentElement.dataset.theme=t;document.querySelector('meta[name="theme-color"]').content=T[t]}}catch(e){}</script>
+<script src="custom-theme.js"></script>
+<script>try{var T={galaxy:'#050a1c',brown:'#120b06',green:'#06100b',pink:'#15070f',orange:'#140a04',night:'#040107'},t=localStorage.getItem('fr_theme');if(T[t]){document.documentElement.dataset.theme=t;document.querySelector('meta[name="theme-color"]').content=T[t]}else if(window.FRTheme)FRTheme.boot()}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="auth.css">
 <link rel="stylesheet" href="stickers.css">
@@ -215,6 +216,8 @@
           </div>
           <p class="set-note" style="margin-top:14px">يُحفظ اختيارك في حسابك ويظهر على كل أجهزتك.</p>
         </section>
+
+        <section class="set-page" data-page="themeedit" data-title="ثيم مخصص"><div id="themeEditor"></div></section>
 
         <section class="set-page" data-page="sound" data-title="الصوت والتفاعل السريع">
           <button class="notif-toggle on" id="chatTonesToggle"><span class="opt-txt"><b>نغمة المحادثات</b><small>أصوات الإرسال والاستلام والتفاعلات داخل الموقع</small></span><span class="switch"></span></button>
