@@ -36,7 +36,7 @@ async function deliver(db, messages, tokens) {
 const FXL = { fire: 'ناري 🔥', gift: 'هدية 🎁', ice: 'ثلجي ❄️', love: 'قلوب 💖', galaxy: 'مجرة 🌌', sakura: 'ساكورا 🌸', thunder: 'صاعقة ⚡', gold: 'ذهبي ✨' };
 const SPLG = /\|\|(?=\S)([\s\S]*?\S)\|\|/g;
 const hide = (s) => String(s || '').replace(SPLG, '••••');
-const fxText = (msg) => FXL[msg.fx] ? 'أرسل لك رسالة في قالب "' + FXL[msg.fx] + '"' : null;
+const fxText = (msg) => String(msg.text || '').indexOf('FRTHEME1:') === 0 ? 'شارك معك ثيمًا مخصصًا' : FXL[msg.fx] ? 'أرسل لك رسالة في قالب "' + FXL[msg.fx] + '"' : null;
 const MEN = /(^|[\s(\[{«"'،؛:!?؟—\-])@([A-Za-z0-9_]{3,20})(?![A-Za-z0-9_@])/g;
 async function mentionedUids(db, text) {
   const names = new Set(); let m; MEN.lastIndex = 0;
