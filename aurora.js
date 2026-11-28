@@ -75,7 +75,32 @@
       ctx.fillRect(0, 0, w, h);
     });
 
+    if (gal) drawDust(t);
+
     raf = requestAnimationFrame(loop);
+  }
+  // soft drifting dust + bokeh, only in the galaxy theme (blue/white/violet specks that twinkle)
+  let dust = null;
+  const DCOL = [[255, 255, 255], [190, 225, 255], [120, 190, 255], [170, 150, 255]];
+  function drawDust(t) {
+    if (!dust) dust = Array.from({ length: 52 }, (_, i) => {
+      const bokeh = i % 4 === 0;
+      return { x: Math.random(), y: Math.random(), vx: (Math.random() - 0.3) * 0.000018, vy: -(0.000008 + Math.random() * 0.00002),
+        r: bokeh ? 9 + Math.random() * 16 : 1.2 + Math.random() * 2.6, a: bokeh ? 0.10 + Math.random() * 0.12 : 0.45 + Math.random() * 0.5,
+        f: 0.0006 + Math.random() * 0.0016, ph: Math.random() * 6.28, c: DCOL[(Math.random() * DCOL.length) | 0], bokeh };
+    });
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of dust) {
+      const x = (((p.x + t * p.vx) % 1) + 1) % 1 * w, y = (((p.y + t * p.vy) % 1) + 1) % 1 * h;
+      const a = p.a * (0.55 + 0.45 * Math.sin(t * p.f + p.ph)), [r, g, b] = p.c;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, p.r);
+      grad.addColorStop(0, `rgba(${r},${g},${b},${a})`);
+      grad.addColorStop(p.bokeh ? 0.7 : 0.35, `rgba(${r},${g},${b},${p.bokeh ? a * 0.6 : a * 0.35})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(x, y, p.r, 0, 6.2832); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
   }
   raf = requestAnimationFrame(loop);
 })();

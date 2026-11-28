@@ -624,7 +624,7 @@
     const f = mk('div', 'fxb'); f.dataset.k = k; parts(f, PN[k]); b.appendChild(f);
     if (k === 'gift') b.appendChild(cover());
     { const de = attachFx(b, null, false, k); decor(b, k, false); de.vis = false; demoFires.push(de); if (tileIO) tileIO.observe(b); }
-    b.appendChild(mk('div', 'msg-text', 'مرحباً بك'));
+    b.appendChild(mk('div', 'msg-text', T[k].n));
     return b;
   }
   function build() {
