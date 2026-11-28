@@ -268,7 +268,7 @@
           ".validate": "newData.val() === now || (data.exists() && newData.val() === data.val())"
         },
         "theme": {
-          ".validate": "newData.isString() && (newData.val() === 'default' || newData.val() === 'galaxy')"
+          ".validate": "newData.isString() && newData.val().matches(/^(default|galaxy|brown|green|pink|orange|night)$/)"
         },
         "hf": {
           ".validate": "newData.val() === now || (data.exists() && newData.val() === data.val())"

@@ -29,6 +29,7 @@
   resize();
 
   const BASE = '#0b0613';
+  const AUR = {"galaxy": {"b": "#040a1a", "c": [[28, 84, 214], [16, 44, 140], [40, 150, 255]]}, "brown": {"b": "#0f0a06", "c": [[120, 66, 30], [70, 38, 18], [150, 90, 45]]}, "green": {"b": "#050f0a", "c": [[20, 120, 70], [10, 70, 45], [40, 160, 95]]}, "pink": {"b": "#14060f", "c": [[190, 50, 120], [110, 28, 80], [230, 90, 160]]}, "orange": {"b": "#130a04", "c": [[200, 95, 20], [120, 55, 12], [245, 140, 40]]}, "night": {"b": "#030106", "c": [[48, 14, 90], [22, 6, 52], [80, 22, 125]]}};
 
   // Fewer, much bigger blobs (radius ~90-130% of the larger viewport
   // dimension) so each one reads as a clear, dominant wash of color like
@@ -54,8 +55,8 @@
     lastDraw = ts;
     const t = ts || 0;
 
-    const gal = document.documentElement.dataset.theme === 'galaxy';
-    ctx.fillStyle = gal ? '#040a1a' : BASE;
+    const th = document.documentElement.dataset.theme, gal = th === 'galaxy', A = AUR[th];
+    ctx.fillStyle = A ? A.b : BASE;
     ctx.fillRect(0, 0, w, h);
 
     const maxDim = Math.max(w, h);
@@ -64,7 +65,7 @@
       const y = (b.cy + Math.cos(t * b.freqY + b.phase * 1.3) * b.ay) * h;
       const rPulse = b.rBase + Math.sin(t * b.rFreq + b.phase) * b.rAmp;
       const radius = rPulse * maxDim * 0.62;
-      const [r, g, bl] = gal ? [[28, 84, 214], [16, 44, 140], [40, 150, 255]][bi] : b.color;
+      const [r, g, bl] = A ? A.c[bi] : b.color;
       const grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
       grad.addColorStop(0,    `rgba(${r},${g},${bl},0.92)`);
       grad.addColorStop(0.28, `rgba(${r},${g},${bl},0.62)`);

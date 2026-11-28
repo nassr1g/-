@@ -66,7 +66,7 @@
 .stk-row { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 12.5px; color: var(--text-2); }
 .stk-row input[type=range] { flex: 1; accent-color: var(--accent-light); }
 .stk-chip { border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06); color: var(--text-1); font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 14px; border-radius: 999px; cursor: pointer; transition: all .25s ease; }
-.stk-chip.on { background: rgba(95,241,224,.14); border-color: rgba(95,241,224,.5); color: var(--neon-cyan); }
+.stk-chip.on { background: rgba(var(--nc),.14); border-color: rgba(var(--nc),.5); color: var(--neon-cyan); }
 .stk-note, .stk-msgline { font-size: 12px; line-height: 1.6; color: var(--text-3); margin: 4px 2px 10px; }
 .stk-msgline { color: var(--text-2); min-height: 18px; }
 .stk-bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,.1); overflow: hidden; margin: 8px 0; }
@@ -79,7 +79,7 @@
 .stk-icell { position: relative; height: 0; padding-bottom: 100%; contain: layout paint; border-radius: 14px; overflow: hidden; cursor: pointer; background: rgba(255,255,255,.05); border: 1.5px solid transparent; transition: transform .25s cubic-bezier(.34,1.56,.64,1), border-color .2s, box-shadow .2s; }
 .stk-icell:active { transform: scale(.92); }
 .stk-icell img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
-.stk-icell.sel { border-color: var(--neon-cyan); box-shadow: 0 0 12px rgba(95,241,224,.35); }
+.stk-icell.sel { border-color: var(--neon-cyan); box-shadow: 0 0 12px rgba(var(--nc),.35); }
 .stk-icell.sel::after { content: '✓'; position: absolute; top: 4px; inset-inline-end: 4px; width: 18px; height: 18px; border-radius: 50%; background: var(--neon-cyan); color: var(--h-120726); font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; animation: selPop .3s cubic-bezier(.34,1.6,.5,1); }
 
 /* import sheet: grid scrolls, the import button stays visible */
@@ -106,11 +106,11 @@
 @keyframes dateTick { from { opacity: 0; transform: translateY(8px) scale(.9); } to { opacity: 1; transform: none; } }
 
 /* ===== notices that must be noticed: icon, ring pulse, shake for errors ===== */
-.app-toast::before { content: 'i'; flex: 0 0 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 700 14px var(--font-brand); color: var(--h-120726); background: var(--neon-cyan); box-shadow: 0 0 12px rgba(95,241,224,.6); }
+.app-toast::before { content: 'i'; flex: 0 0 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 700 14px var(--font-brand); color: var(--h-120726); background: var(--neon-cyan); box-shadow: 0 0 12px rgba(var(--nc),.6); }
 .app-toast.err::before { content: '!'; background: var(--danger); box-shadow: 0 0 12px rgba(255,107,127,.65); }
 .app-toast.show { animation: toastRing 1.2s ease-out .2s 1; }
 .app-toast.err.show { animation: toastRingErr 1.2s ease-out .2s 1, toastShake .5s ease .15s 1; }
-@keyframes toastRing { from { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 10px 28px rgba(0,0,0,.45), 0 0 0 0 rgba(95,241,224,.6); } to { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 10px 28px rgba(0,0,0,.45), 0 0 0 18px rgba(95,241,224,0); } }
+@keyframes toastRing { from { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 10px 28px rgba(0,0,0,.45), 0 0 0 0 rgba(var(--nc),.6); } to { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 10px 28px rgba(0,0,0,.45), 0 0 0 18px rgba(var(--nc),0); } }
 @keyframes toastRingErr { from { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 10px 28px rgba(0,0,0,.45), 0 0 0 0 rgba(255,107,127,.7); } to { box-shadow: inset 0 1px 0 rgba(255,255,255,.3), 0 10px 28px rgba(0,0,0,.45), 0 0 0 18px rgba(255,107,127,0); } }
 @keyframes toastShake { 20% { transform: translateX(7px); } 40% { transform: translateX(-6px); } 60% { transform: translateX(4px); } 80% { transform: translateX(-2px); } }
 .system-msg { animation: msgIn .45s cubic-bezier(.34,1.4,.5,1); }
@@ -128,7 +128,7 @@ body.searching .bottom-dock { transform: translateY(115%); opacity: 0; pointer-e
 .srch > * { pointer-events: auto; }
 .srch-bar { display: flex; align-items: center; gap: 8px; padding: calc(10px + env(safe-area-inset-top)) 10px 10px; flex-shrink: 0;
   background: linear-gradient(120deg, rgba(var(--p-37-22-64),.95), rgba(var(--p-60-32-100),.92)); -webkit-backdrop-filter: blur(18px) saturate(180%); backdrop-filter: blur(18px) saturate(180%);
-  border-bottom: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 28px rgba(0,0,0,.35), inset 0 -1px 0 rgba(95,241,224,.18);
+  border-bottom: 1px solid rgba(255,255,255,.12); box-shadow: 0 10px 28px rgba(0,0,0,.35), inset 0 -1px 0 rgba(var(--nc),.18);
   transform: translateY(-110%); opacity: 0; transition: transform .45s cubic-bezier(.22,1,.36,1), opacity .25s ease; }
 .srch.on .srch-bar { transform: none; opacity: 1; }
 .srch-x, .srch-up, .srch-dn, .srch-clr { width: 38px; height: 38px; flex-shrink: 0; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-1); background: rgba(255,255,255,.08); transition: transform .25s cubic-bezier(.34,1.56,.64,1), opacity .2s, background .2s; }
@@ -164,6 +164,6 @@ mark.srch-hit { background: rgba(255,214,102,.3); color: #fff2c4; border-radius:
 
 /* trash icon + search highlight in the site's own colors (cyan -> pink glow), blinking 3x so it is easy to spot */
 .trash-ic { color: var(--danger); }
-mark.srch-hit { background: linear-gradient(135deg, rgba(95,241,224,.32), rgba(239,111,201,.36)); color: #fff; border-radius: 5px; padding: 0 2px; box-shadow: 0 0 0 1px rgba(95,241,224,.5), 0 0 8px rgba(95,241,224,.25); }
+mark.srch-hit { background: linear-gradient(135deg, rgba(var(--nc),.32), rgba(var(--np),.36)); color: #fff; border-radius: 5px; padding: 0 2px; box-shadow: 0 0 0 1px rgba(var(--nc),.5), 0 0 8px rgba(var(--nc),.25); }
 .msg-bubble mark.srch-hit { animation: hitPulse .85s ease-in-out 3; }
-@keyframes hitPulse { 0%, 100% { box-shadow: 0 0 0 1px rgba(95,241,224,.5), 0 0 8px rgba(95,241,224,.25); background-color: transparent; } 50% { box-shadow: 0 0 0 3px rgba(95,241,224,.75), 0 0 18px rgba(239,111,201,.65); } }
+@keyframes hitPulse { 0%, 100% { box-shadow: 0 0 0 1px rgba(var(--nc),.5), 0 0 8px rgba(var(--nc),.25); background-color: transparent; } 50% { box-shadow: 0 0 0 3px rgba(var(--nc),.75), 0 0 18px rgba(var(--np),.65); } }

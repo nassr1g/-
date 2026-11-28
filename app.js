@@ -3160,9 +3160,10 @@
     row.appendChild(cv);
     const ctx = cv.getContext('2d');
     ctx.scale(dpr, dpr);
-    const pal = row.classList.contains('mine')
+    const isMine = row.classList.contains('mine'), dv = getComputedStyle(document.documentElement).getPropertyValue(isMine ? '--dust-mine' : '--dust-theirs').trim();
+    const pal = dv ? dv.split('|') : (isMine
       ? ['138,79,192', '107,63,168', '79,47,133', '170,120,225', '243,238,252']
-      : ['48,25,79', '29,18,48', '80,50,130', '155,89,182', '243,238,252'];
+      : ['48,25,79', '29,18,48', '80,50,130', '155,89,182', '243,238,252']);
     const bx = br.left - rr.left + M, by = br.top - rr.top + M, bw = br.width, bh = br.height;
     const SWEEP = 760, LIFE = 760;
     const n = Math.max(160, Math.min(900, Math.round(bw * bh / 12)));
@@ -3513,17 +3514,18 @@
   // Init
   // ========================================================
   // ---------- themes (default / galaxy): saved on the account (users/<uid>/theme) + cached on the device ----------
-  let curTheme = document.documentElement.dataset.theme === 'galaxy' ? 'galaxy' : 'default';
+  const THEMES = {"default": "#14091f", "galaxy": "#050a1c", "brown": "#120b06", "green": "#06100b", "pink": "#15070f", "orange": "#140a04", "night": "#040107"};
+  let curTheme = THEMES[document.documentElement.dataset.theme] ? document.documentElement.dataset.theme : 'default';
   function markThemeUI() { document.querySelectorAll('[data-theme-pick]').forEach((b) => b.classList.toggle('active', b.dataset.themePick === curTheme)); }
   function applyTheme(t, animate) {
-    t = t === 'galaxy' ? 'galaxy' : 'default';
+    t = THEMES[t] ? t : 'default';
     if (t === curTheme) { markThemeUI(); return; }
     const doc = document.documentElement;
     const run = () => {
-      if (t === 'galaxy') doc.dataset.theme = 'galaxy'; else delete doc.dataset.theme;
+      if (t === 'default') delete doc.dataset.theme; else doc.dataset.theme = t;
       curTheme = t;
       try { localStorage.setItem('fr_theme', t); } catch (e) {}
-      const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = t === 'galaxy' ? '#050a1c' : '#14091f';
+      const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = THEMES[t];
       markThemeUI();
     };
     if (animate && document.startViewTransition && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) document.startViewTransition(run);
