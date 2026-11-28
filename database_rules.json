@@ -267,6 +267,9 @@
         "updatedAt": {
           ".validate": "newData.val() === now || (data.exists() && newData.val() === data.val())"
         },
+        "theme": {
+          ".validate": "newData.isString() && (newData.val() === 'default' || newData.val() === 'galaxy')"
+        },
         "hf": {
           ".validate": "newData.val() === now || (data.exists() && newData.val() === data.val())"
         },

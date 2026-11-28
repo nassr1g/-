@@ -9,7 +9,7 @@ importScripts('/store.js');
 
 const CACHE = 'fr-shell-v1'; // (kept: bumping would drop the saved copies)
 const NET_TIMEOUT = 3500; // slow network -> fall back to the saved copy
-const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/rich.js', '/stickers.js', '/stickers.css', '/effects.js', '/effects.css', '/auth.js', '/app.js',
+const SHELL = ['/', '/index.html', '/style.css', '/auth.css', '/aurora.js', '/emoji-data.js', '/store.js', '/rich.js', '/stickers.js', '/stickers.css', '/effects.js', '/effects.css', '/theme.css', '/auth.js', '/app.js',
   '/manifest.webmanifest', '/icons/app-icon-192.png', '/icons/app-icon-512.png', '/icons/apple-touch-icon.png'];
 const FIREBASE_JS = ['app', 'database', 'auth', 'messaging'].map((n) => 'https://www.gstatic.com/firebasejs/10.12.2/firebase-' + n + '-compat.js');
 const FONT_CSS = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600&display=swap';

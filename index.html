@@ -14,10 +14,12 @@
 <link rel="icon" type="image/png" href="/icons/app-icon-192.png">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <title>ᠻ𝘳𝓲ꫀꪀᦔ𝘴' 𝘳ꪮꪮꪑ</title>
+<script>try{if(localStorage.getItem('fr_theme')==='galaxy'){document.documentElement.dataset.theme='galaxy';document.querySelector('meta[name="theme-color"]').content='#050a1c'}}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="auth.css">
 <link rel="stylesheet" href="stickers.css">
 <link rel="stylesheet" href="effects.css">
+<link rel="stylesheet" href="theme.css">
 </head>
 <body>
   <canvas id="auroraCanvas" class="aurora-canvas"></canvas>
@@ -153,6 +155,7 @@
             <button class="set-row" data-go="account"><b>الحساب والملف الشخصي</b><i>‹</i></button>
             <button class="set-row" data-go="security"><b>الأمان والبريد وكلمة المرور</b><i>‹</i></button>
             <button class="set-row" data-go="notif"><b>الإشعارات</b><i>‹</i></button>
+            <button class="set-row" data-go="theme"><b>المظهر (الثيم)</b><i>‹</i></button>
             <button class="set-row" data-go="sound"><b>الصوت والتفاعل السريع</b><i>‹</i></button>
           </div>
           <button class="notif-enable-btn" id="installSheetBtn" style="display:none;">تثبيت التطبيق</button>
@@ -198,6 +201,14 @@
           </div>
           <button class="notif-toggle" id="muteMentionToggle" style="margin-top:8px;"><span class="opt-txt"><b>كتم إشعارات الإشارات</b><small>لا يصلك إشعار خاص عندما يذكرك أحد بـ @</small></span><span class="switch"></span></button>
           <button class="notif-toggle" id="muteReactToggle" style="margin-top:8px;"><span class="opt-txt"><b>كتم إشعارات التفاعلات</b><small>لا يصلك إشعار عندما يتفاعل أحد على رسالتك</small></span><span class="switch"></span></button>
+        </section>
+
+        <section class="set-page" data-page="theme" data-title="المظهر">
+          <div class="theme-grid" id="themeGrid">
+            <button class="theme-card active" data-theme-pick="default"><span class="tp tp-default"><i class="b1"></i><i class="b2"></i></span><b>الأرجواني</b><small>الثيم الحالي</small></button>
+            <button class="theme-card" data-theme-pick="galaxy"><span class="tp tp-galaxy"><i class="b1"></i><i class="b2"></i></span><b>المجرة الزرقاء</b><small>أزرق عميق متوهج</small></button>
+          </div>
+          <p class="set-note" style="margin-top:14px">يُحفظ اختيارك في حسابك ويظهر على كل أجهزتك.</p>
         </section>
 
         <section class="set-page" data-page="sound" data-title="الصوت والتفاعل السريع">

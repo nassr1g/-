@@ -3512,6 +3512,31 @@
   // ========================================================
   // Init
   // ========================================================
+  // ---------- themes (default / galaxy): saved on the account (users/<uid>/theme) + cached on the device ----------
+  let curTheme = document.documentElement.dataset.theme === 'galaxy' ? 'galaxy' : 'default';
+  function markThemeUI() { document.querySelectorAll('[data-theme-pick]').forEach((b) => b.classList.toggle('active', b.dataset.themePick === curTheme)); }
+  function applyTheme(t, animate) {
+    t = t === 'galaxy' ? 'galaxy' : 'default';
+    if (t === curTheme) { markThemeUI(); return; }
+    const doc = document.documentElement;
+    const run = () => {
+      if (t === 'galaxy') doc.dataset.theme = 'galaxy'; else delete doc.dataset.theme;
+      curTheme = t;
+      try { localStorage.setItem('fr_theme', t); } catch (e) {}
+      const m = document.querySelector('meta[name="theme-color"]'); if (m) m.content = t === 'galaxy' ? '#050a1c' : '#14091f';
+      markThemeUI();
+    };
+    if (animate && document.startViewTransition && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) document.startViewTransition(run);
+    else if (animate) { doc.classList.add('theme-anim'); run(); setTimeout(() => doc.classList.remove('theme-anim'), 650); }
+    else run();
+  }
+  $('themeGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-theme-pick]'); if (!b) return;
+    const t = b.dataset.themePick; if (t === curTheme) return;
+    applyTheme(t, true);
+    if (db && myUid) db.ref('users/' + myUid).update({ theme: t, updatedAt: SV() }).catch(() => showSystemError('تعذر حفظ المظهر في حسابك، سيبقى على هذا الجهاز فقط'));
+  });
+
   window.FRChat = { expand: () => updateComposerExpanded(), closeEmoji: () => closeEmojiPanel(), sendSticker: (s) => queueMessage('ملصق', s), toast: showToast, sheet: openActionSheet, db: () => db, uid: () => myUid, online: () => !!(isConnected && firebaseReady) };
 
   function init() {
@@ -3539,9 +3564,9 @@
     }
     FRAuth.start({
       db,
-      onReady: (p, isNew) => { myUid = p.uid; myName = p.displayName; myJoined = Number(p.hf) || 0; bootChat(isNew); },
+      onReady: (p, isNew) => { myUid = p.uid; myName = p.displayName; myJoined = Number(p.hf) || 0; applyTheme(p.theme, false); bootChat(isNew); },
       onProfile: (p) => {
-        myName = p.displayName;
+        myName = p.displayName; applyTheme(p.theme, true);
         if (pushToken && db) db.ref('chat/push/' + pushToken).update({ name: myName }).catch(() => {});
         if (usersRef && isConnected && document.visibilityState === 'visible') announcePresence();
       },
